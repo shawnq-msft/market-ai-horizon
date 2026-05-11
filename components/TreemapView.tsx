@@ -2,7 +2,7 @@
 
 import { ResponsiveContainer, Tooltip, Treemap } from 'recharts'
 import { getHeatValue, getTheme, relevancePercent } from '@/lib/filters'
-import { formatMarketCap, formatPercent } from '@/lib/format'
+import { formatGigawatts, formatMarketCap, formatPercent } from '@/lib/format'
 import { factorHeatColor, purityHeatColor, relativeValuationHeatColor, weeklyHeatColor } from '@/lib/valuation'
 import type { CompanyThemeRow } from '@/lib/filters'
 import type { HeatMetric } from '@/lib/types'
@@ -116,12 +116,19 @@ function metricLabel(metric: HeatMetric) {
     capex: 'Capex',
     retailHeat: '散户热',
     mainFund: '主力资金',
+    mmluPro: 'MMLU',
+    agentBenchmark: 'Agent',
+    codingBenchmark: '代码',
+    openRouterRank: 'OR排名',
+    openRouterUsage: 'OR用量',
+    dataCenterCapacity: 'DC GW',
   }
   return labels[metric]
 }
 
 function formatMetricValue(row: CompanyThemeRow, metric: HeatMetric) {
   if (metric === 'weekly') return formatPercent(row.company.weekChangePct)
+  if (metric === 'dataCenterCapacity') return formatGigawatts(row.company.dataCenterCapacityGw)
   return Math.round(getHeatValue(row, metric)).toString()
 }
 
@@ -139,6 +146,7 @@ function TreeTooltip({ active, payload, metric }: any) {
         <span>面积 {formatMarketCap(row.company.marketCapUsdBn)}</span>
         <span>颜色 {metricLabel(metric)} {formatMetricValue(row, metric)}</span>
         <span>周变化 {formatPercent(row.company.weekChangePct)}</span>
+        <span>DC容量 {formatGigawatts(row.company.dataCenterCapacityGw)}</span>
         <span>估值分 {row.company.valuationScore}</span>
         <span>纯度 {row.exposure.purity}</span>
         <span>相关性 {relevancePercent(row)}%</span>

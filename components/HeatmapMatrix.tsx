@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { getHeatValue, getTheme, relevancePercent } from '@/lib/filters'
-import { formatMarketCap, formatPercent, formatValuation } from '@/lib/format'
+import { formatGigawatts, formatMarketCap, formatPercent, formatValuation } from '@/lib/format'
 import { factorHeatColor, metricHeatColor, purityHeatColor, weeklyHeatColor } from '@/lib/valuation'
 import type { CompanyThemeRow } from '@/lib/filters'
 import type { HeatMetric } from '@/lib/types'
@@ -26,6 +26,12 @@ type SortColumn =
   | 'capex'
   | 'retailHeat'
   | 'mainFund'
+  | 'mmluPro'
+  | 'agentBenchmark'
+  | 'codingBenchmark'
+  | 'openRouterRank'
+  | 'openRouterUsage'
+  | 'dataCenterCapacity'
   | 'selected'
 
 type Column = {
@@ -46,13 +52,23 @@ const factorColumns: Array<{ id: HeatMetric; label: string }> = [
   { id: 'capex', label: 'Capex' },
   { id: 'retailHeat', label: '散户热' },
   { id: 'mainFund', label: '主力' },
+  { id: 'mmluPro', label: 'MMLU' },
+  { id: 'agentBenchmark', label: 'Agent' },
+  { id: 'codingBenchmark', label: 'Code' },
+  { id: 'openRouterRank', label: 'OR排' },
+  { id: 'openRouterUsage', label: 'OR用量' },
+  { id: 'dataCenterCapacity', label: 'DC GW' },
 ]
 
 export function HeatmapMatrix({ rows, metric }: { rows: CompanyThemeRow[]; metric: HeatMetric }) {
   const [sortColumn, setSortColumn] = useState<SortColumn>('selected')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [query, setQuery] = useState('')
+  const [minimumColumn, setMinimumColumn] = useState<SortColumn>('selected')
+  const [minimumValue, setMinimumValue] = useState('')
   const columns = useMemo(() => getColumns(metric), [metric])
-  const sortedRows = useMemo(() => sortRows(rows, columns, sortColumn, sortDirection).slice(0, 120), [rows, columns, sortColumn, sortDirection])
+  const filteredRows = useMemo(() => filterRows(rows, columns, query, minimumColumn, minimumValue), [rows, columns, query, minimumColumn, minimumValue])
+  const sortedRows = useMemo(() => sortRows(filteredRows, columns, sortColumn, sortDirection).slice(0, 120), [filteredRows, columns, sortColumn, sortDirection])
 
   function toggleSort(column: SortColumn) {
     if (column === sortColumn) {
@@ -65,11 +81,18 @@ export function HeatmapMatrix({ rows, metric }: { rows: CompanyThemeRow[]; metri
 
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60">
-      <div className="border-b border-slate-800 px-3 py-2 text-xs text-slate-400">
-        HeatMap · 点击列头排序 · 表格列宽固定对齐 · 最后一列跟随当前“配色/因子”选择
+      <div className="space-y-3 border-b border-slate-800 px-3 py-3 text-xs text-slate-400">
+        <div>HeatMap · 点击列头排序 · 支持文本搜索和任一数值维度门槛筛选 · 当前显示 {sortedRows.length}/{filteredRows.length}/{rows.length}</div>
+        <div className="grid gap-2 md:grid-cols-[1fr_180px_140px]">
+          <input className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" placeholder="搜索公司、代码、市场、主题" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <select className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" value={minimumColumn} onChange={(event) => setMinimumColumn(event.target.value as SortColumn)}>
+            {columns.filter((column) => typeof column.sortValue(rows[0] ?? emptyRow()) === 'number').map((column) => <option key={column.id} value={column.id}>{column.label} ≥</option>)}
+          </select>
+          <input className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" placeholder="门槛，空为不限" value={minimumValue} onChange={(event) => setMinimumValue(event.target.value)} />
+        </div>
       </div>
       <div className="max-h-[720px] overflow-auto">
-        <table className="min-w-[1560px] table-fixed border-collapse text-xs text-slate-300">
+        <table className="min-w-[1960px] table-fixed border-collapse text-xs text-slate-300">
           <colgroup>
             {columns.map((column) => <col key={column.id} style={{ width: column.width }} />)}
           </colgroup>
@@ -221,8 +244,8 @@ function getColumns(metric: HeatMetric): Column[] {
     ...factorColumns.map((factor): Column => ({
       id: factor.id as SortColumn,
       label: factor.label,
-      width: factor.id === 'aiValue' || factor.id === 'retailHeat' ? '86px' : '74px',
-      value: (row) => Math.round(getHeatValue(row, factor.id)),
+      width: factor.id === 'aiValue' || factor.id === 'retailHeat' || factor.id === 'dataCenterCapacity' ? '86px' : '74px',
+      value: (row) => factor.id === 'dataCenterCapacity' ? formatGigawatts(row.company.dataCenterCapacityGw) : Math.round(getHeatValue(row, factor.id)),
       sortValue: (row) => getHeatValue(row, factor.id),
       fill: (row) => factorHeatColor(getHeatValue(row, factor.id)),
       align: 'right',
@@ -237,6 +260,51 @@ function getColumns(metric: HeatMetric): Column[] {
       align: 'right',
     },
   ]
+}
+
+function filterRows(rows: CompanyThemeRow[], columns: Column[], query: string, minimumColumn: SortColumn, minimumValue: string) {
+  const normalizedQuery = query.trim().toLowerCase()
+  const threshold = Number(minimumValue)
+  const thresholdColumn = columns.find((column) => column.id === minimumColumn)
+
+  return rows.filter((row) => {
+    const theme = getTheme(row.exposure.themeId)
+    if (normalizedQuery) {
+      const haystack = [row.company.nameZh, row.company.nameEn, row.company.ticker, row.company.market, theme?.nameZh, theme?.nameEn].filter(Boolean).join(' ').toLowerCase()
+      if (!haystack.includes(normalizedQuery)) return false
+    }
+    if (Number.isFinite(threshold) && minimumValue.trim() && thresholdColumn) {
+      const value = thresholdColumn.sortValue(row)
+      if (typeof value !== 'number' || value < threshold) return false
+    }
+    return true
+  })
+}
+
+function emptyRow(): CompanyThemeRow {
+  return {
+    company: {
+      id: '',
+      nameEn: '',
+      market: 'US',
+      listed: true,
+      primaryLayer: 'cloud-apps',
+      primaryTheme: '',
+      segment: '',
+      tagZh: '',
+      tagEn: '',
+      themeExposures: [],
+      aiRelevanceScore: 0,
+      revenueElasticityScore: 0,
+      purityScore: 0,
+      valuationScore: 0,
+      valuationLabel: 'Fair',
+      riskFlags: [],
+      dataQuality: 'seed',
+      updatedAt: '',
+    },
+    exposure: { themeId: '', layerId: 'cloud-apps', relevance: 0, purity: 0, evidence: '' },
+  }
 }
 
 function sortRows(rows: CompanyThemeRow[], columns: Column[], sortColumn: SortColumn, direction: SortDirection) {
@@ -259,6 +327,7 @@ function fillSelectedMetric(row: CompanyThemeRow, metric: HeatMetric) {
 
 function formatSelectedMetric(row: CompanyThemeRow, metric: HeatMetric) {
   if (metric === 'weekly') return formatPercent(row.company.weekChangePct)
+  if (metric === 'dataCenterCapacity') return formatGigawatts(row.company.dataCenterCapacityGw)
   return Math.round(getHeatValue(row, metric))
 }
 
@@ -274,6 +343,12 @@ function metricLabel(metric: HeatMetric) {
     capex: 'Capex',
     retailHeat: '散户热',
     mainFund: '主力资金',
+    mmluPro: 'MMLU',
+    agentBenchmark: 'Agent',
+    codingBenchmark: '代码',
+    openRouterRank: 'OR排名',
+    openRouterUsage: 'OR用量',
+    dataCenterCapacity: 'DC GW',
   }
   return labels[metric]
 }

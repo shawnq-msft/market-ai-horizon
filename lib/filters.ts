@@ -1,6 +1,6 @@
 import { companies } from '@/data/companies.seed'
 import { layers } from '@/data/layers'
-import type { Company, HeatMetric, LayerId, Market, SortKey, ThemeExposure } from './types'
+import type { BenchmarkProvider, Company, HeatMetric, LayerId, Market, SortKey, ThemeExposure } from './types'
 
 export type ThemeSelection = string[]
 
@@ -104,6 +104,12 @@ export function sortThemeRows(rows: CompanyThemeRow[], sortKey: SortKey) {
       case 'capex':
       case 'retailHeat':
       case 'mainFund':
+      case 'mmluPro':
+      case 'agentBenchmark':
+      case 'codingBenchmark':
+      case 'openRouterRank':
+      case 'openRouterUsage':
+      case 'dataCenterCapacity':
         return getHeatValue(b, sortKey) - getHeatValue(a, sortKey)
     }
   })
@@ -128,7 +134,13 @@ export function getHeatValue(row: CompanyThemeRow, metric: HeatMetric) {
   if (metric === 'elasticity') return row.company.revenueElasticityScore * 20
   if (metric === 'capex') return (row.company.capexLinkageScore ?? 0) * 20
   if (metric === 'retailHeat') return row.company.retailHeatScore ?? estimateRetailHeat(row)
-  return row.company.mainFundFlowScore ?? estimateMainFundFlow(row)
+  if (metric === 'mainFund') return row.company.mainFundFlowScore ?? estimateMainFundFlow(row)
+  if (metric === 'mmluPro') return getBenchmarkScore(row, 'mmlu-pro')
+  if (metric === 'agentBenchmark') return getBenchmarkScore(row, 'agent')
+  if (metric === 'codingBenchmark') return getBenchmarkScore(row, 'coding')
+  if (metric === 'openRouterRank') return getBenchmarkRankScore(row, 'openrouter')
+  if (metric === 'openRouterUsage') return getOpenRouterUsageScore(row)
+  return getDataCenterCapacityScore(row)
 }
 
 export function getQualityFactor(row: CompanyThemeRow) {
@@ -146,6 +158,52 @@ export function getAiValueFactor(row: CompanyThemeRow) {
 
 export function relevancePercent(row: CompanyThemeRow) {
   return Math.max(0, Math.min(100, Math.round((row.exposure.revenueExposure ?? row.exposure.relevance * 12))))
+}
+
+export function getBenchmark(company: Company, provider: BenchmarkProvider) {
+  return company.modelBenchmarks?.find((benchmark) => benchmark.provider === provider)
+}
+
+export function getBenchmarkScore(row: CompanyThemeRow, provider: BenchmarkProvider) {
+  const benchmark = getBenchmark(row.company, provider)
+  if (!benchmark) return 0
+  if (benchmark.score !== undefined) return Math.max(0, Math.min(100, benchmark.score))
+  return rankToScore(benchmark.rank)
+}
+
+export function getBenchmarkRankScore(row: CompanyThemeRow, provider: BenchmarkProvider) {
+  return rankToScore(getBenchmark(row.company, provider)?.rank ?? getBenchmark(row.company, provider)?.usageRank)
+}
+
+export function getOpenRouterUsageScore(row: CompanyThemeRow) {
+  const benchmark = getBenchmark(row.company, 'openrouter')
+  if (!benchmark) return 0
+  if (benchmark.usageSharePct !== undefined) return Math.max(0, Math.min(100, benchmark.usageSharePct * 10))
+  return rankToScore(benchmark.usageRank ?? benchmark.rank)
+}
+
+export function getDataCenterCapacityScore(row: CompanyThemeRow) {
+  const capacityGw = row.company.dataCenterCapacityGw ?? 0
+  const gpuEquivalentK = row.company.gpuEquivalentK ?? 0
+  return Math.max(0, Math.min(100, Math.round(capacityGw * 12 + gpuEquivalentK / 20)))
+}
+
+export function formatBenchmarkSummary(company: Company) {
+  const mmlu = getBenchmark(company, 'mmlu-pro')
+  const agent = getBenchmark(company, 'agent')
+  const coding = getBenchmark(company, 'coding')
+  const openRouter = getBenchmark(company, 'openrouter')
+  return [
+    mmlu?.rank ? `MMLU #${mmlu.rank}` : undefined,
+    agent?.rank ? `Agent #${agent.rank}` : undefined,
+    coding?.rank ? `Code #${coding.rank}` : undefined,
+    openRouter?.usageRank ? `OR #${openRouter.usageRank}` : openRouter?.rank ? `OR #${openRouter.rank}` : undefined,
+  ].filter(Boolean).join(' · ')
+}
+
+function rankToScore(rank?: number) {
+  if (!rank) return 0
+  return Math.max(0, Math.min(100, 105 - rank * 5))
 }
 
 function estimateRetailHeat(row: CompanyThemeRow) {

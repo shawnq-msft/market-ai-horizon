@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "update:market": "tsx scripts/update-market-data.ts",
+    "update:benchmarks": "tsx scripts/update-model-benchmarks.ts",
     "update:earnings": "tsx scripts/update-earnings-calendar.ts",
     "update:themes": "tsx scripts/update-theme-classification.ts"
   },

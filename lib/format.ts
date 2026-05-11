@@ -14,6 +14,16 @@ export function formatMarketCap(value?: number) {
   return `$${formatCompactNumber(value, 'B')}`
 }
 
+export function formatGigawatts(value?: number) {
+  if (value === undefined) return '—'
+  return `${formatCompactNumber(value, 'GW')}`
+}
+
+export function formatGpuEquivalent(value?: number) {
+  if (value === undefined) return '—'
+  return `${formatCompactNumber(value, 'k GPU')}`
+}
+
 export function formatValuation(metric?: string, value?: number) {
   if (!metric) return '—'
   if (metric === 'Private') return value === undefined ? 'Private' : `Private valuation ${formatMarketCap(value)}`

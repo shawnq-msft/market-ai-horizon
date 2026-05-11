@@ -32,6 +32,22 @@ export type ValuationLabel = 'Cheap' | 'Fair' | 'Rich' | 'Very Rich' | 'Private'
 
 export type DataQuality = 'seed' | 'estimated' | 'api' | 'verified'
 
+export type BenchmarkProvider = 'mmlu-pro' | 'agent' | 'coding' | 'openrouter'
+
+export type ModelBenchmarkMetric = {
+  provider: BenchmarkProvider
+  sourceName: string
+  sourceUrl: string
+  modelName: string
+  rank?: number
+  score?: number
+  scoreLabel?: string
+  usageRank?: number
+  usageSharePct?: number
+  usageLabel?: string
+  updatedAt: string
+}
+
 export type Layer = {
   id: LayerId
   nameZh: string
@@ -87,6 +103,12 @@ export type Company = {
   ytdChangePct?: number
   retailHeatScore?: number
   mainFundFlowScore?: number
+  dataCenterCapacityGw?: number
+  gpuEquivalentK?: number
+  modelBenchmarks?: ModelBenchmarkMetric[]
+  valuationSourceUrl?: string
+  quoteUrl?: string
+  newsSearchUrl?: string
   valuationMetric?: ValuationMetric
   valuationValue?: number
   valuationScore: number
@@ -99,5 +121,40 @@ export type Company = {
 }
 
 export type ViewMode = 'cards' | 'treemap' | 'heatmap'
-export type HeatMetric = 'valuation' | 'weekly' | 'purity' | 'quality' | 'momentum' | 'aiValue' | 'elasticity' | 'capex' | 'retailHeat' | 'mainFund'
-export type SortKey = 'relevance' | 'purity' | 'weekly' | 'valuation' | 'marketCap' | 'earnings' | 'quality' | 'momentum' | 'aiValue' | 'elasticity' | 'capex' | 'retailHeat' | 'mainFund'
+export type HeatMetric =
+  | 'valuation'
+  | 'weekly'
+  | 'purity'
+  | 'quality'
+  | 'momentum'
+  | 'aiValue'
+  | 'elasticity'
+  | 'capex'
+  | 'retailHeat'
+  | 'mainFund'
+  | 'mmluPro'
+  | 'agentBenchmark'
+  | 'codingBenchmark'
+  | 'openRouterRank'
+  | 'openRouterUsage'
+  | 'dataCenterCapacity'
+export type SortKey =
+  | 'relevance'
+  | 'purity'
+  | 'weekly'
+  | 'valuation'
+  | 'marketCap'
+  | 'earnings'
+  | 'quality'
+  | 'momentum'
+  | 'aiValue'
+  | 'elasticity'
+  | 'capex'
+  | 'retailHeat'
+  | 'mainFund'
+  | 'mmluPro'
+  | 'agentBenchmark'
+  | 'codingBenchmark'
+  | 'openRouterRank'
+  | 'openRouterUsage'
+  | 'dataCenterCapacity'

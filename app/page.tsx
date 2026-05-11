@@ -25,6 +25,12 @@ const sortOptions: Array<{ id: SortKey; label: string }> = [
   { id: 'capex', label: 'Capex联动' },
   { id: 'retailHeat', label: '散户热度' },
   { id: 'mainFund', label: '主力资金' },
+  { id: 'mmluPro', label: 'MMLU-Pro' },
+  { id: 'agentBenchmark', label: 'Agent基准' },
+  { id: 'codingBenchmark', label: '代码能力' },
+  { id: 'openRouterRank', label: 'OpenRouter排名' },
+  { id: 'openRouterUsage', label: 'OpenRouter用量' },
+  { id: 'dataCenterCapacity', label: '数据中心GW' },
 ]
 
 const heatOptions: Array<{ id: HeatMetric; label: string }> = [
@@ -38,6 +44,12 @@ const heatOptions: Array<{ id: HeatMetric; label: string }> = [
   { id: 'capex', label: 'Capex联动' },
   { id: 'retailHeat', label: '散户热度' },
   { id: 'mainFund', label: '主力资金' },
+  { id: 'mmluPro', label: 'MMLU-Pro' },
+  { id: 'agentBenchmark', label: 'Agent基准' },
+  { id: 'codingBenchmark', label: '代码能力' },
+  { id: 'openRouterRank', label: 'OpenRouter排名' },
+  { id: 'openRouterUsage', label: 'OpenRouter用量' },
+  { id: 'dataCenterCapacity', label: '数据中心GW' },
 ]
 
 const factorFloorOptions = [0, 40, 60, 80]

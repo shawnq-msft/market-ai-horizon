@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '17 8 * * 1'
 
+permissions:
+  contents: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -17,4 +20,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run update:market --if-present
+      - run: npm run update:market -- --all
+      - run: npm run update:benchmarks
+      - name: Commit updated seed data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/companies.seed.ts
+          git diff --cached --quiet || git commit -m "chore: weekly data update $(date -u +%Y-%m-%d)"
+          git push
