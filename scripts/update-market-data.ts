@@ -34,6 +34,16 @@ type EastMoneyKlineResponse = {
   }
 }
 
+type EastMoneySnapshotResponse = {
+  data?: {
+    f116?: number
+    f162?: number
+    f167?: number
+    f173?: number
+    f172?: string
+  }
+}
+
 type SinaQuote = {
   price?: number
   previous?: number
@@ -43,6 +53,14 @@ type SinaQuote = {
 
 type ProviderName = 'eastmoney' | 'yahoo' | 'sina' | 'itick'
 
+type ValuationUpdate = {
+  marketCap?: number
+  metric?: 'PE' | 'P/B'
+  value?: number
+  score?: number
+  label?: 'Cheap' | 'Fair' | 'Rich' | 'Very Rich'
+}
+
 type QuoteUpdate = {
   company: Company
   symbol: string
@@ -51,6 +69,7 @@ type QuoteUpdate = {
   week: number
   retailHeat?: number
   mainFund?: number
+  valuation?: ValuationUpdate
 }
 
 type RefreshOptions = {
@@ -71,6 +90,13 @@ const iTickMinIntervalMs = 12500
 let lastITickRequestAt = 0
 
 const defaultProviders: ProviderName[] = ['eastmoney', 'yahoo', 'sina', 'itick']
+const eastMoneyRequestInit: RequestInit = {
+  headers: {
+    accept: 'application/json,text/plain,*/*',
+    referer: 'https://quote.eastmoney.com/',
+    'user-agent': 'Mozilla/5.0',
+  },
+}
 const marketSuffix: Partial<Record<Market, string>> = {
   HK: '.HK',
   CN: '',
@@ -109,10 +135,15 @@ async function fetchQuoteUpdate(company: Company, providers: ProviderName[]): Pr
 
   for (const provider of candidates) {
     try {
-      if (provider === 'eastmoney') return await fetchEastMoneyUpdate(company)
-      if (provider === 'yahoo') return await fetchYahooUpdate(company)
-      if (provider === 'sina') return await fetchSinaUpdate(company)
-      return await fetchITickUpdate(company)
+      const update = provider === 'eastmoney'
+        ? await fetchEastMoneyUpdate(company)
+        : provider === 'yahoo'
+          ? await fetchYahooUpdate(company)
+          : provider === 'sina'
+            ? await fetchSinaUpdate(company)
+            : await fetchITickUpdate(company)
+      update.valuation ??= await fetchEastMoneyValuation(company)
+      return update
     } catch (error) {
       errors.push(`${provider}: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -167,7 +198,7 @@ async function fetchEastMoneyUpdate(company: Company): Promise<QuoteUpdate> {
   const symbol = eastMoneySymbol(company)
   if (!symbol) throw new Error('unsupported symbol')
 
-  const response = await fetchJson<EastMoneyKlineResponse>(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${symbol.secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=5`)
+  const response = await fetchJson<EastMoneyKlineResponse>(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${symbol.secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=5`, eastMoneyRequestInit)
   const rows = response.data?.klines ?? []
   const closes = rows.map((row) => Number(row.split(',')[2])).filter((value) => Number.isFinite(value))
   const turnovers = rows.map((row) => Number(row.split(',')[6])).filter((value) => Number.isFinite(value))
@@ -177,7 +208,37 @@ async function fetchEastMoneyUpdate(company: Company): Promise<QuoteUpdate> {
 
   const retailHeat = heatFromTurnover(turnovers)
   const mainFund = mainFundFromPriceAndTurnover(closes, turnovers)
-  return quoteUpdate(company, symbol.label, 'eastmoney', price, previous, retailHeat, mainFund)
+  const update = quoteUpdate(company, symbol.label, 'eastmoney', price, previous, retailHeat, mainFund)
+  update.valuation = await fetchEastMoneyValuation(company)
+  return update
+}
+
+async function fetchEastMoneyValuation(company: Company): Promise<ValuationUpdate | undefined> {
+  const symbol = eastMoneySymbol(company)
+  if (!symbol) return undefined
+
+  try {
+    const response = await fetchJson<EastMoneySnapshotResponse>(`https://push2.eastmoney.com/api/qt/stock/get?secid=${symbol.secid}&fields=f116,f162,f167,f173,f172`, eastMoneyRequestInit)
+    const data = response.data
+    if (!data) return undefined
+
+    const marketCap = normalizeMarketCapUsd(data.f116, data.f172, company.market)
+    const pe = normalizeEastMoneyRatio(data.f162)
+    const pb = normalizeEastMoneyRatio(data.f167)
+    const metric = pe && pe > 0 ? 'PE' : pb && pb > 0 ? 'P/B' : undefined
+    const value = metric === 'PE' ? pe : metric === 'P/B' ? pb : undefined
+    const score = metric && value ? valuationScore(metric, value) : undefined
+
+    return {
+      marketCap,
+      metric,
+      value,
+      score,
+      label: score === undefined ? undefined : valuationLabel(score),
+    }
+  } catch {
+    return undefined
+  }
 }
 
 async function fetchSinaUpdate(company: Company): Promise<QuoteUpdate> {
@@ -284,6 +345,34 @@ function mainFundFromPriceAndTurnover(closes: number[], turnovers: Array<number 
   return Math.max(0, Math.min(100, Math.round(heat + (latest / previous - 1) * 120)))
 }
 
+function normalizeEastMoneyRatio(value?: number) {
+  if (value === undefined || value <= 0) return undefined
+  const normalized = value / 100
+  return Number.isFinite(normalized) ? round(normalized, 1) : undefined
+}
+
+function normalizeMarketCapUsd(value?: number, currency?: string, market?: Market) {
+  if (value === undefined || value <= 0) return undefined
+  const rate = currency === 'HKD' ? 0.128 : market === 'CN' ? 0.138 : 1
+  return round(value * rate / 1_000_000_000, 1)
+}
+
+function valuationScore(metric: 'PE' | 'P/B', value: number) {
+  if (metric === 'P/B') return Math.max(20, Math.min(96, Math.round(30 + value * 8)))
+  if (value <= 15) return 35
+  if (value <= 25) return 52
+  if (value <= 35) return 70
+  if (value <= 50) return 84
+  return 94
+}
+
+function valuationLabel(score: number) {
+  if (score < 45) return 'Cheap'
+  if (score < 65) return 'Fair'
+  if (score < 85) return 'Rich'
+  return 'Very Rich'
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const text = await fetchText(url, init)
   return JSON.parse(text) as T
@@ -318,7 +407,15 @@ function upsertNumberProperty(line: string, property: string, value: number) {
   if (pattern.test(line)) return line.replace(pattern, `, ${formatted}`)
   if (property === 'price') return line.replace(', week:', `, ${formatted}, week:`)
   if (property === 'week') return line.replace(', metric:', `, ${formatted}, metric:`)
+  if (property === 'marketCap') return line.replace(', price:', `, ${formatted}, price:`)
   return line.replace(', metric:', `, ${formatted}, metric:`)
+}
+
+function upsertStringProperty(line: string, property: string, value: string) {
+  const formatted = `${property}: '${escapeString(value)}'`
+  const pattern = new RegExp(`, ${property}: '[^']*'`)
+  if (pattern.test(line)) return line.replace(pattern, `, ${formatted}`)
+  return line.replace(', value:', `, ${formatted}, value:`)
 }
 
 function updateCompanyLine(source: string, update: QuoteUpdate) {
@@ -331,11 +428,20 @@ function updateCompanyLine(source: string, update: QuoteUpdate) {
   line = upsertNumberProperty(line, 'week', update.week)
   if (update.retailHeat !== undefined) line = upsertNumberProperty(line, 'retailHeat', update.retailHeat)
   if (update.mainFund !== undefined) line = upsertNumberProperty(line, 'mainFund', update.mainFund)
+  if (update.valuation?.marketCap !== undefined) line = upsertNumberProperty(line, 'marketCap', update.valuation.marketCap)
+  if (update.valuation?.metric) line = upsertStringProperty(line, 'metric', update.valuation.metric)
+  if (update.valuation?.value !== undefined) line = upsertNumberProperty(line, 'value', update.valuation.value)
+  if (update.valuation?.score !== undefined) line = upsertNumberProperty(line, 'score', update.valuation.score)
+  if (update.valuation?.label) line = upsertStringProperty(line, 'label', update.valuation.label)
   return source.replace(match[0], line)
 }
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function escapeString(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
 }
 
 function parseOptions(args: string[]): RefreshOptions {
@@ -405,10 +511,11 @@ async function main() {
   for (const update of updates) source = updateCompanyLine(source, update)
   await writeFile(sourcePath, source)
 
+  const valuationUpdates = updates.filter((update) => update.valuation?.metric || update.valuation?.marketCap !== undefined).length
   console.log(`Updated ${updates.length}/${listed.length} selected listed symbols with latest price and 5-session change.`)
   console.log(`Selection: ${selectionLabel(options)}. Providers: ${options.providers.join(',')}. Use --all, --limit=N, --ids=a,b, --tickers=MSFT,0100.HK, or --market=HK.`)
   console.log('Provider strategy: Eastmoney/Sina for China/HK quote and heat proxies, Yahoo for broad global fallback, iTick via ITICK_TOKEN with 5 rpm throttle.')
-  console.log('Valuation metric/value/score fields were preserved; public valuation endpoints were unavailable.')
+  console.log(`Valuation updates: ${valuationUpdates}. Eastmoney snapshot fields refresh marketCap, PE/PB, valuation score, and label when available; unavailable values preserve existing fields.`)
   if (updates.length) {
     console.log('Provider hits:')
     for (const [provider, count] of providerCounts(updates)) console.log(`- ${provider}: ${count}`)
