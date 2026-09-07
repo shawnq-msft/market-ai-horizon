@@ -1,4 +1,6 @@
 import { MetricBadge } from './MetricBadge'
+import { SmartMoneySensor } from './SmartMoneySensor'
+import { StockCandlestickChart } from './StockCandlestickChart'
 import { getTheme } from '@/lib/filters'
 import { formatGigawatts, formatGpuEquivalent, formatMarketCap, formatPercent, formatValuation } from '@/lib/format'
 import { newsSearchUrl, quoteUrl, valuationSourceUrl } from '@/lib/links'
@@ -34,6 +36,9 @@ export function CompanyDetailPanel({ company }: { company: Company }) {
         <Tile label="GPU等效规模" value={formatGpuEquivalent(company.gpuEquivalentK)} />
         <Tile label="下一期财报" value={company.nextEarningsDate ?? 'TBD'} />
       </section>
+
+      <StockCandlestickChart company={company} />
+      <SmartMoneySensor companies={[company]} detail />
 
       <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5">
         <h2 className="text-lg font-semibold text-white">主题暴露 / Theme exposures</h2>

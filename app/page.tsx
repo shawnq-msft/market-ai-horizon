@@ -5,6 +5,7 @@ import { CompanyGrid } from '@/components/CompanyGrid'
 import { DashboardHeader } from '@/components/DashboardHeader'
 import { HeatmapMatrix } from '@/components/HeatmapMatrix'
 import { MarketFilter } from '@/components/MarketFilter'
+import { SmartMoneySensor } from '@/components/SmartMoneySensor'
 import { ThemeTreeFilter } from '@/components/ThemeTreeFilter'
 import { TreemapView } from '@/components/TreemapView'
 import { ViewToggle } from '@/components/ViewToggle'
@@ -114,7 +115,9 @@ export default function Home() {
           </div>
         </section>
 
-        <div className="flex items-center justify-between text-sm text-slate-400">
+        <SmartMoneySensor companies={rows.map((row) => row.company)} />
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
           <span>当前公司：{rows.length} · 已选主题：{themeIds.length || '全部'}</span>
           <span>所有视图每家公司只显示一次，相关性以营收/利润敞口百分比估算，散户热度/主力资金为可更新指标。</span>
         </div>

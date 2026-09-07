@@ -48,6 +48,7 @@ export function CompanyThemeCard({ row }: { row: CompanyThemeRow }) {
       </div>
 
       <div className="mt-1 flex items-center gap-2 text-[9px] leading-3 text-slate-500">
+        {company.listed && company.ticker ? <Link className="text-cyan-300 hover:text-cyan-100" href={`/companies/${company.id}#stock-chart`}>K线</Link> : null}
         {companyQuoteUrl ? <ExternalCardLink href={companyQuoteUrl} label="行情" /> : null}
         <ExternalCardLink href={companyNewsUrl} label="消息" />
         {company.market === 'Private' && companyValuationSourceUrl ? <ExternalCardLink href={companyValuationSourceUrl} label="估值源" /> : null}
