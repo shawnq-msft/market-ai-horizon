@@ -3,6 +3,8 @@ export type Investor = {
   name: string
   nameZh: string
   organization: string
+  entityType: 'person' | 'institution' | 'company'
+  holdingsCoverage: 'live' | 'reviewed-partial' | 'unavailable'
   role: string
   description: string
   coverageNote: string
@@ -16,6 +18,7 @@ export type InvestorFund = {
   holdingsUrl?: string
   sourceUrl: string
   relationship: string
+  coverageNote?: string
 }
 
 export type InvestorRecordKind = 'comment' | 'personal-trade' | 'fund-trade' | 'holding' | 'holding-change'
@@ -40,7 +43,8 @@ export type InvestorRecord = {
   weightPct?: number
   sourceUrl: string
   sourceName: string
-  evidence: 'official-disclosure' | 'primary-statement' | 'media-report'
+  evidence: 'official-disclosure' | 'primary-statement' | 'media-report' | 'secondary-disclosure'
+  valueRangeUsd?: { min: number; max: number }
   disclosureNote: string
 }
 

@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import { companies } from '@/data/companies.seed'
 import { investorFunds, reviewedInvestorRecords } from '@/data/investors'
+import { holdingsReviewedAt, reviewedHoldingSnapshots } from '@/data/investor-holdings'
 import type { Company } from './types'
 import type { InvestorDataset, InvestorFund, InvestorRecord } from './investor-types'
 
@@ -90,6 +91,24 @@ export function parseArkHoldings(rows: unknown[][], fund: InvestorFund, retrieve
   return records
 }
 
+export function reviewedHoldings(): InvestorRecord[] {
+  return reviewedHoldingSnapshots.flatMap((snapshot) => snapshot.rows.map((row) => {
+    const companyId = companyForTicker(row.ticker)
+    return {
+      id: `reviewed-${snapshot.portfolioId}-${snapshot.asOf}-${row.ticker}`,
+      investorId: snapshot.investorId, kind: 'holding' as const, fundId: snapshot.portfolioId,
+      actor: row.actor ?? snapshot.actor, companyId, ticker: row.ticker,
+      securityName: companies.find((company) => company.id === companyId)?.nameEn ?? row.ticker,
+      occurredAt: snapshot.asOf, publishedAt: snapshot.publishedAt, retrievedAt: holdingsReviewedAt,
+      shares: row.shares, valueRangeUsd: row.valueRangeUsd,
+      title: `${snapshot.actor} · ${row.ticker}`,
+      summary: '人工核实的报告期持仓（可能仅覆盖部分条目），不是实时组合；不由买卖通知推算，不代表当日买入。',
+      sourceUrl: snapshot.sourceUrl, sourceName: snapshot.sourceName, evidence: snapshot.evidence,
+      disclosureNote: `${snapshot.note} 本快照需人工核实更新，不随 ARK 抓取自动更新；未录入的证券不代表未持有。`,
+    }
+  }))
+}
+
 export async function fetchInvestorDataset(): Promise<InvestorDataset> {
   const fetchedAt = new Date().toISOString()
   const definitions = [
@@ -110,5 +129,12 @@ export async function fetchInvestorDataset(): Promise<InvestorDataset> {
       return { records: [], status: { id: source.id, label: source.label, url: source.url, status: 'unavailable' as const, count: 0, error: '抓取失败或数据结构发生变化；不使用估算记录替代。' } }
     }
   }))
-  return { fetchedAt, records: [...reviewedInvestorRecords, ...results.flatMap((result) => result.records)], sources: results.map((result) => result.status) }
+  return {
+    fetchedAt,
+    records: [...reviewedInvestorRecords, ...reviewedHoldings(), ...results.flatMap((result) => result.records)],
+    sources: [...results.map((result) => result.status), ...reviewedHoldingSnapshots.map((snapshot) => ({
+      id: `reviewed-${snapshot.portfolioId}`, label: `${snapshot.actor} · 人工核实 ${holdingsReviewedAt} / 持仓截至 ${snapshot.asOf}`,
+      url: snapshot.sourceUrl, status: 'ok' as const, count: snapshot.rows.length,
+    }))],
+  }
 }

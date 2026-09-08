@@ -2,7 +2,7 @@ import type { InvestorRecord, InvestorRecordKind } from './investor-types'
 
 export const recordKindLabels: Record<InvestorRecordKind, string> = {
   comment: '本人发言', 'personal-trade': '本人买卖', 'fund-trade': '基金买卖',
-  holding: '基金持仓', 'holding-change': '持仓变化（非逐笔交易）',
+  holding: '披露持仓', 'holding-change': '持仓变化（非逐笔交易）',
 }
 
 export function filterInvestorRecords(records: InvestorRecord[], filters: {
@@ -21,9 +21,19 @@ export function filterInvestorRecords(records: InvestorRecord[], filters: {
 
 export function latestFundHoldings(records: InvestorRecord[]) {
   const dates = new Map<string, string>()
+  const key = (record: InvestorRecord) => JSON.stringify([record.investorId, record.fundId ?? record.actor])
   for (const record of records) {
-    if (record.kind !== 'holding' || !record.fundId) continue
-    dates.set(record.fundId, [dates.get(record.fundId) ?? '', record.occurredAt].sort().at(-1)!)
+    if (record.kind !== 'holding') continue
+    dates.set(key(record), [dates.get(key(record)) ?? '', record.occurredAt].sort().at(-1)!)
   }
-  return records.filter((record) => record.kind === 'holding' && record.occurredAt === dates.get(record.fundId ?? ''))
+  return records.filter((record) => record.kind === 'holding' && record.occurredAt === dates.get(key(record)))
+}
+
+// Select newest available snapshot BEFORE mapping/searching stocks, so old
+// positions do not reappear just because a newer snapshot contains different stocks.
+export function holdingCompanyIds(records: InvestorRecord[], investorId: string): Set<string> {
+  if (!investorId) return new Set()
+  return new Set(latestFundHoldings(records.filter((record) => record.investorId === investorId))
+    .filter((record) => record.companyId && (record.shares === undefined || record.shares > 0))
+    .map((record) => record.companyId!))
 }

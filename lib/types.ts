@@ -28,7 +28,7 @@ export type ValuationMetric =
   | 'NAV Premium'
   | 'Private'
 
-export type ValuationLabel = 'Cheap' | 'Fair' | 'Rich' | 'Very Rich' | 'Private'
+export type ValuationLabel = 'Cheap' | 'Fair' | 'Rich' | 'Very Rich' | 'Private' | 'Unknown'
 
 export type DataQuality = 'seed' | 'estimated' | 'api' | 'verified'
 

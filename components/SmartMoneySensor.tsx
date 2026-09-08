@@ -44,7 +44,9 @@ export function SmartMoneySensor({ companies, detail = false, investorId }: { co
   }, [attempt])
 
   const activeInvestor = investorId || selectedInvestor
-  const scope = filterInvestorRecords(data?.records ?? [], { investorId: activeInvestor, companyIds: companies?.map((company) => company.id) })
+  const allRecords = data?.records ?? []
+  const currentRecords = [...allRecords.filter((record) => record.kind !== 'holding'), ...latestFundHoldings(allRecords)]
+  const scope = filterInvestorRecords(currentRecords, { investorId: activeInvestor, companyIds: companies?.map((company) => company.id) })
   const records = filterInvestorRecords(scope, { kind: kind || undefined, fundId, query })
   const visible = (kind === 'holding' ? latestFundHoldings(records).sort((a, b) => (b.weightPct ?? 0) - (a.weightPct ?? 0)) : records)
   const availableFunds = investorFunds.filter((fund) => !activeInvestor || fund.investorId === activeInvestor)
@@ -55,7 +57,7 @@ export function SmartMoneySensor({ companies, detail = false, investorId }: { co
       <div><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-300"><Radar className="h-5 w-5" />Investor intelligence</div><h2 className="mt-2 text-xl font-semibold text-white">Smart Money Sensor</h2><p className="mt-1 text-xs leading-5 text-slate-400">明星投资人 · 个股发言 · 本人买卖 · 基金买卖与持仓</p></div>
       <Link href="/investors" className="inline-flex items-center gap-2 rounded-xl border border-cyan-800 px-3 py-2 text-xs text-cyan-200 hover:bg-cyan-950"><Users className="h-4 w-4" />投资人目录 →</Link>
     </div>
-    <p className="mt-3 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs leading-5 text-amber-200">基金操作 ≠ 本人交易；持仓快照 ≠ 当日买入；13F 增减持 ≠ 已知成交日。当前仅跟踪 Tom Lee、Cathie Wood，新增名单待确认。</p>
+    <p className="mt-3 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs leading-5 text-amber-200">基金／公司操作 ≠ 本人交易；持仓快照 ≠ 当日买入；13F 增减持 ≠ 已知成交日。家庭申报不等于申报人本人持有。按实际主体、报告期和来源分别展示。</p>
     {!investorId && <div className="mt-3 flex flex-wrap gap-2">{investors.map((investor) => <Link key={investor.id} href={`/investors/${investor.id}`} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-cyan-500">{investor.name} ↗</Link>)}</div>}
 
     <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -80,7 +82,7 @@ export function SmartMoneySensor({ companies, detail = false, investorId }: { co
     {data && <p className="mt-4 text-[11px] text-slate-500">数据获取：{data.fetchedAt.replace('T', ' ').slice(0, 19)} UTC · {process.env.NEXT_PUBLIC_STATIC_HISTORY === 'true' ? '静态部署快照，重新部署更新' : '数据源按小时缓存，非实时'}</p>}
     <details className="mt-4 text-xs leading-6 text-slate-400"><summary className="w-fit cursor-pointer text-cyan-300">数据覆盖、归属与来源</summary>
       <p className="mt-2">本人发言仅收录可核实的个股观点；本人交易只认明确个人账户披露。ARK 基金交易为团队组合操作，不是 Cathie Wood 个人指令。基金持仓有报告期／截至日，披露日期未知时不以抓取时间代替。市值并非成本，权重不跨基金相加。</p>
-      <p>当前接入 ARK 官方最新交易文件及 ARKK / ARKQ / ARKW 持仓。Tom Lee 关联基金尚未接入；13F 变化、个人发言和个人账户交易暂未录入。空记录不代表零持仓。所有内容仅供研究，不构成投资建议。</p>
+      <p>ARK 数据自动抓取；新增机构的 13F 和佩洛西年度资产为人工核实快照，大多仅覆盖部分条目，不随抓取自动更新。佩洛西具体资产所有人未核实，年末日期按年度规则确定。Tom Lee 与特朗普持仓尚未接入；13F 变化、个人发言和个人账户交易暂未录入。空记录不代表零持仓。所有内容仅供研究，不构成投资建议。</p>
       {data?.sources.map((source) => <p key={source.id}><a href={source.url} target="_blank" rel="noreferrer" className="text-cyan-300 underline">{source.label}</a> · {source.status === 'ok' ? `${source.count} 条原始记录` : source.error}</p>)}
     </details>
   </section>
@@ -89,15 +91,16 @@ export function SmartMoneySensor({ companies, detail = false, investorId }: { co
 function RecordCard({ record }: { record: InvestorRecord }) {
   const investor = investors.find((item) => item.id === record.investorId)
   return <article className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-    <div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full border px-2 py-1 text-[10px] ${tones[record.kind]}`}>{recordKindLabels[record.kind]}</span><time className="text-xs tabular-nums text-slate-400" dateTime={record.occurredAt}>{record.kind === 'holding' ? '持仓截至' : record.kind === 'holding-change' ? '报告期末' : '事件日期'} {record.occurredAt}</time></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full border px-2 py-1 text-[10px] ${tones[record.kind]}`}>{record.kind === 'holding' ? record.investorId === 'nancy-pelosi' ? '家庭申报持仓（所有人未核实）' : investor?.entityType === 'company' ? '公司持仓' : record.fundId ? '基金／机构持仓' : '披露持仓' : recordKindLabels[record.kind]}</span><time className="text-xs tabular-nums text-slate-400" dateTime={record.occurredAt}>{record.kind === 'holding' ? '持仓截至' : record.kind === 'holding-change' ? '报告期末' : '事件日期'} {record.occurredAt}</time></div>
     {record.direction && <p className={`mt-2 text-xs font-semibold ${record.direction === 'sell' || record.direction === 'decrease' ? 'text-rose-300' : 'text-emerald-300'}`}>{({ buy: '买入 Buy', sell: '卖出 Sell', increase: '报告期增持（不等于逐笔买入）', decrease: '报告期减持（不等于逐笔卖出）' })[record.direction]}</p>}
     <h3 className="mt-3 break-words text-sm font-semibold text-white">{record.title}</h3>
     <p className="mt-1 text-xs text-slate-400">{record.securityName}</p>
     <p className="mt-2 text-xs text-cyan-200">实际主体：{record.actor}</p>
-    <p className="mt-1 text-[11px] text-slate-400">关联投资人：<Link href={`/investors/${record.investorId}`} className="text-cyan-300 hover:underline">{investor?.name ?? record.investorId} ↗</Link>{record.fundId ? ' · 基金账户，非本人' : ''}</p>
+    <p className="mt-1 text-[11px] text-slate-400">关联投资人／主体：<Link href={`/investors/${record.investorId}`} className="text-cyan-300 hover:underline">{investor?.name ?? record.investorId} ↗</Link>{record.fundId ? ' · 归属以实际申报账户为准' : ''}</p>
     <p className="mt-3 text-xs leading-5 text-slate-300">{record.summary}</p>
     {record.kind !== 'comment' && <dl className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-900/70 p-3 text-xs"><div><dt className="text-slate-500">{record.kind === 'holding' ? '持仓数量' : '披露数量'}</dt><dd className="mt-1 break-all tabular-nums text-slate-100">{format(record.shares)}</dd></div><div><dt className="text-slate-500">市值 USD</dt><dd className="mt-1 break-all tabular-nums text-slate-100">{format(record.marketValueUsd)}</dd></div><div><dt className="text-slate-500">基金权重</dt><dd className="mt-1 text-slate-100">{record.weightPct === undefined ? '未披露' : `${record.weightPct.toFixed(2)}%`}</dd></div></dl>}
+    {record.valueRangeUsd && <p className="mt-2 text-xs text-amber-200">申报价值区间：USD {format(record.valueRangeUsd.min)}–{format(record.valueRangeUsd.max)}（非精确市值；持有人未核实）</p>}
     <div className="mt-3 flex flex-wrap gap-3 text-xs"><a href={record.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-cyan-300 hover:underline">{record.sourceName}<ExternalLink className="h-3 w-3" /></a>{record.companyId ? <Link href={`/companies/${record.companyId}#smart-money`} className="text-cyan-300 hover:underline">个股页面 ↗</Link> : <span className="text-slate-500">未映射至看板个股</span>}</div>
-    <details className="mt-3 text-[11px] leading-5 text-slate-500"><summary className="cursor-pointer">披露说明与时间</summary><p>{record.disclosureNote}</p><p>证据类型：{record.evidence === 'official-disclosure' ? '官方披露' : record.evidence === 'primary-statement' ? '本人原始发言' : '媒体报道'}</p><p>披露日期：{record.publishedAt ?? '未单独披露'} · 抓取：{record.retrievedAt.slice(0, 10)}</p></details>
+    <details className="mt-3 text-[11px] leading-5 text-slate-500"><summary className="cursor-pointer">披露说明与时间</summary><p>{record.disclosureNote}</p><p>证据类型：{record.evidence === 'official-disclosure' ? '官方披露' : record.evidence === 'secondary-disclosure' ? '二手披露解析（非直接核实原件）' : record.evidence === 'primary-statement' ? '本人原始发言' : '媒体报道'}</p><p>披露日期：{record.publishedAt ?? '未单独披露'} · 获取／核实：{record.retrievedAt.slice(0, 10)}</p></details>
   </article>
 }

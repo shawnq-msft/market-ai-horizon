@@ -1,16 +1,18 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CompanyGrid } from '@/components/CompanyGrid'
 import { DashboardHeader } from '@/components/DashboardHeader'
 import { HeatmapMatrix } from '@/components/HeatmapMatrix'
 import { MarketFilter } from '@/components/MarketFilter'
-import { SmartMoneySensor } from '@/components/SmartMoneySensor'
+import { InvestorHoldingsFilter } from '@/components/InvestorHoldingsFilter'
 import { ThemeTreeFilter } from '@/components/ThemeTreeFilter'
 import { TreemapView } from '@/components/TreemapView'
 import { ViewToggle } from '@/components/ViewToggle'
 import { createThemeRows, filterThemeRows, sortThemeRows, aggregateCompanyRows, getHeatValue } from '@/lib/filters'
 import type { HeatMetric, Market, SortKey, ViewMode } from '@/lib/types'
+import type { InvestorDataset } from '@/lib/investor-types'
+import { holdingCompanyIds } from '@/lib/smart-money'
 
 const sortOptions: Array<{ id: SortKey; label: string }> = [
   { id: 'relevance', label: '相关性' },
@@ -62,13 +64,33 @@ export default function Home() {
   const [sortKey, setSortKey] = useState<SortKey>('relevance')
   const [heatMetric, setHeatMetric] = useState<HeatMetric>('valuation')
   const [factorFloor, setFactorFloor] = useState(0)
+  const [investorId, setInvestorId] = useState('')
+  const [investorData, setInvestorData] = useState<InvestorDataset | null>(null)
+  const [investorError, setInvestorError] = useState('')
+  const [investorAttempt, setInvestorAttempt] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setInvestorError('')
+    setInvestorData(null)
+    void fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/api/investors/activity.json`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('持仓数据暂不可用。')
+        const data = await response.json() as InvestorDataset
+        if (!Array.isArray(data.records) || !Array.isArray(data.sources)) throw new Error('持仓数据格式异常。')
+        if (!controller.signal.aborted) setInvestorData(data)
+      }).catch(() => { if (!controller.signal.aborted) setInvestorError('持仓加载失败，未显示未经筛选的公司。') })
+    return () => controller.abort()
+  }, [investorAttempt])
+
+  const heldIds = useMemo(() => investorId ? holdingCompanyIds(investorData?.records ?? [], investorId) : null, [investorData, investorId])
 
   const allRows = useMemo(() => createThemeRows(), [])
   const rows = useMemo(() => {
     const filtered = filterThemeRows({ rows: allRows, themeIds, market })
-    const aggregated = aggregateCompanyRows(filtered, themeIds).filter((row) => getHeatValue(row, heatMetric) >= factorFloor)
+    const aggregated = aggregateCompanyRows(filtered, themeIds).filter((row) => getHeatValue(row, heatMetric) >= factorFloor && (!heldIds || heldIds.has(row.company.id)))
     return sortThemeRows(aggregated, sortKey)
-  }, [allRows, themeIds, market, sortKey, heatMetric, factorFloor])
+  }, [allRows, themeIds, market, sortKey, heatMetric, factorFloor, heldIds])
 
   function toggleTheme(themeId: string) {
     setThemeIds((current) => current.includes(themeId) ? current.filter((id) => id !== themeId) : [...current, themeId])
@@ -90,6 +112,7 @@ export default function Home() {
         <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-4">
           <div className="flex flex-col gap-4">
             <ThemeTreeFilter themeIds={themeIds} onLayerToggle={toggleLayer} onThemeToggle={toggleTheme} onClearThemes={() => setThemeIds([])} />
+            <InvestorHoldingsFilter value={investorId} onChange={setInvestorId} data={investorData} error={investorError} onRetry={() => setInvestorAttempt((attempt) => attempt + 1)} />
             <div className="grid gap-3 md:grid-cols-[180px_180px_220px_170px_auto] md:items-end">
               <MarketFilter value={market} onChange={setMarket} />
               <label className="flex flex-col gap-1 text-xs text-slate-400">
@@ -114,8 +137,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-
-        <SmartMoneySensor companies={rows.map((row) => row.company)} />
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
           <span>当前公司：{rows.length} · 已选主题：{themeIds.length || '全部'}</span>

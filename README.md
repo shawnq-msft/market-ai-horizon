@@ -2,6 +2,10 @@
 
 Next.js / React dashboard for the AI value chain, company fundamentals, and market signals.
 
+**[在线访问 / Live Dashboard →](https://shawnq-msft.github.io/market-ai-horizon/)**
+
+Hosted on GitHub Pages · [投资人与机构 / Investors](https://shawnq-msft.github.io/market-ai-horizon/investors)
+
 ## Development
 
 - Install dependencies with `npm install`.
@@ -12,14 +16,17 @@ Next.js / React dashboard for the AI value chain, company fundamentals, and mark
 
 Smart Money Sensor tracks **investor statements, explicitly personal transactions, fund transactions, fund holdings, and periodic holding changes** as separate record types. It is not a price/volume score.
 
-- Investor directory: `/investors`; individual profiles: `/investors/tom-lee` and `/investors/cathie-wood`. Additional investor names await user confirmation.
-- Company pages show only precisely mapped records; the dashboard follows current company filters. Investor pages include other securities with an explicit unmapped label, rather than false company links.
+- The industry dashboard has **only a holdings filter**, not the full activity panel. Selecting a profile intersects its latest verified, mapped holdings with market/theme/factor filters across cards, treemap and heatmap. Clearing restores the original universe. Loading, missing data or failures never fall back to unfiltered stocks while a profile is selected.
+- Investor directory: `/investors`. Profiles: Tom Lee, Cathie Wood, Buffett/Berkshire, Pelosi annual household disclosure, NVIDIA corporate, Trump, Duan Yongping/H&H, Bridgewater, Alphabet/Google, Soros Fund Management and Peter Thiel/Thiel Macro. Companies and institutions are not labeled personal accounts.
+- Company pages retain the full disclosure panel with precisely mapped records. Investor pages also include unmapped securities. Holdings are selected by latest report per actual account before company filtering; buys/sells do not establish current ownership, and zero-share positions are excluded from dashboard selection.
 - ARK official latest trade XLS is parsed as **fund trades**, never Cathie Wood personal trades. The file is unofficial/unreconciled, excludes IPO and ETF creation/redemption transactions, may be incomplete, and is overwritten by later disclosures. No complete transaction archive is claimed.
 - ARKK, ARKQ and ARKW official CSV holdings show shares, USD market value and percentage-point fund weight. Other listed ARK funds currently have trade notifications only. Market value is not cost; fund weights are not summed across funds. Private/untickered securities retain their source identity without guessing company links.
 - Personal remarks require reviewed, stock-specific source text. `data/investors.ts` contains the curated record collection, currently empty because no remarks were verified during setup. Tom Lee fund sources and personal transactions are not connected yet. Empty records do not imply no ownership or trading.
-- Holding changes are a separate supported category; no 13F feed is currently connected, and no transaction date or price is inferred from changes between reporting periods.
+- `data/investor-holdings.ts` contains manually reviewed 2026-06-30 snapshots for seven institutional reporters. Most are explicitly **partial**, not full portfolios. Source URLs, filing dates, exact reported shares and ticker-mapping provenance are retained; GOOG is never merged into GOOGL, and Soros puts are not added to stock positions. Alphabet manager attribution remains per row. These snapshots require manual source review to update, not hourly refresh.
+- Pelosi entries are partial stock assets from a secondary annual Assets table, not its Transactions/options table. Owner flags remain unverified; shares and exact market value remain unknown, and value ranges are retained. The 2025-12-31 valuation date is rule-derived from the 2026 annual filing under 5 USC 13103(d)/13104(a)(3), not directly read from the PDF. Trump holdings remain unavailable pending row-level verification. Nothing here establishes current ownership.
+- Holding changes are a separate supported category; no automated 13F feed or history diff is connected, and no transaction date or price is inferred from reporting-period changes. Never infer an exit from missing rows in partial snapshots.
 - Event/report-period date, publication date (when actually known), retrieval time, source and actor are distinct. Sources and individual coverage limits are visible in the UI.
-- `/api/investors/activity.json` refreshes hourly in server mode. On GitHub Pages it is a build-time JSON snapshot, updated on redeployment. Partial failures are clearly marked; no fabricated fallback data is generated.
+- `/api/investors/activity.json` refreshes ARK sources hourly in server mode while reviewed disclosures retain their actual review dates. On GitHub Pages it is a build-time JSON snapshot, updated on redeployment. Partial failures are clearly marked; no fabricated fallback data is generated.
 - Official URLs and fund relationships are configured in `data/investors.ts`; parsing and exact ticker mapping are in `lib/investor-provider.ts`. XLSX parsing is server-side only. Add reviewed comments with `kind: 'comment'`, the actual speaker, exact company ID, event date, evidence type, original source and a short paraphrase; do not substitute team research for personal remarks.
 
 ## 个股K线图 / Stock candlesticks

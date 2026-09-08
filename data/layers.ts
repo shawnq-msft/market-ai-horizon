@@ -33,7 +33,7 @@ export const layers: Layer[] = [
     id: 'compute-infra',
     nameZh: '算力基础设施层',
     nameEn: 'AI Compute Infrastructure',
-    description: 'GPU、Neo-Cloud、服务器、光通信、网络、存储和散热。',
+    description: 'GPU、Neo-Cloud、服务器、光通信、网络、存储、散热与卫星／太空算力。',
     themes: [
       { id: 'ai-neo-cloud', layerId: 'compute-infra', nameZh: 'AI Neo-Cloud / GPU Cloud', nameEn: 'AI Neo-Cloud / GPU Cloud', description: 'GPU 租赁、AI 训练集群、推理云和算力托管。' },
       { id: 'gpu-accelerator', layerId: 'compute-infra', nameZh: 'GPU / 加速器', nameEn: 'GPU / Accelerator', description: 'GPU、AI 加速器、CPU 与 AI SoC。' },
@@ -43,6 +43,7 @@ export const layers: Layer[] = [
       { id: 'network-switching', layerId: 'compute-infra', nameZh: '交换网络', nameEn: 'Network Switching', description: '交换机、路由器和数据中心网络。' },
       { id: 'storage-systems', layerId: 'compute-infra', nameZh: '存储系统', nameEn: 'Storage Systems', description: '全闪存、硬盘、企业存储和数据基础设施。' },
       { id: 'cooling-thermal', layerId: 'compute-infra', nameZh: '散热 / 液冷', nameEn: 'Cooling / Thermal', description: '液冷、热管理、电源机柜和数据中心热基础设施。' },
+      { id: 'space-satellite-compute', layerId: 'compute-infra', nameZh: '卫星通信 / 太空算力', nameEn: 'Satellite Connectivity / Orbital Compute', description: '卫星互联网、航天运输及规划中的轨道算力基础设施；规划能力不等于已投产容量。' },
     ],
   },
   {

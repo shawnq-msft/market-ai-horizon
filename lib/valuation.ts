@@ -12,6 +12,8 @@ export function valuationColor(label: ValuationLabel) {
       return 'border-rose-400/40 bg-rose-500/10 text-rose-200'
     case 'Private':
       return 'border-violet-400/40 bg-violet-500/10 text-violet-200'
+    case 'Unknown':
+      return 'border-slate-400/40 bg-slate-500/10 text-slate-200'
   }
 }
 
