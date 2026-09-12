@@ -16,7 +16,7 @@ export const investors: Investor[] = [
     entityType: 'person', holdingsCoverage: 'live',
     role: '创始人 / 首席投资官',
     description: '个人公开观点与 ARK 投资团队管理的基金分开归属。基金持仓、交易披露不代表 Cathie Wood 个人账户或由她亲自下单。',
-    coverageNote: '已接入 ARK 官方交易通知，以及 ARKK / ARKQ / ARKW 持仓；其他 ARK 基金仅展示交易文件中实际披露的记录。个人发言需逐条核实，个人账户交易未接入。',
+    coverageNote: '已接入 ARK 官方交易通知，以及 ARKK / ARKQ / ARKW / ARKF / ARKG / ARKX 六只主动股票 ETF 官方持仓；不代表 ARK 全部产品或个人资产。个人发言需逐条核实，个人账户交易未接入。',
     sources: [{ label: 'ARK 官方介绍', url: 'https://www.ark-funds.com/about' }, { label: 'ARK 官方交易通知及限制', url: 'https://www.ark-funds.com/trade-notifications' }],
   },
   {
@@ -89,9 +89,9 @@ const arkFunds: InvestorFund[] = [
   ['ARKK', 'ARK Innovation ETF', 'ARK_INNOVATION_ETF_ARKK_HOLDINGS.csv'],
   ['ARKQ', 'ARK Autonomous Technology & Robotics ETF', 'ARK_AUTONOMOUS_TECH._&_ROBOTICS_ETF_ARKQ_HOLDINGS.csv'],
   ['ARKW', 'ARK Next Generation Internet ETF', 'ARK_NEXT_GENERATION_INTERNET_ETF_ARKW_HOLDINGS.csv'],
-  ['ARKF', 'ARK Fintech Innovation ETF', ''],
-  ['ARKG', 'ARK Genomic Revolution ETF', ''],
-  ['ARKX', 'ARK Space Exploration & Innovation ETF', ''],
+  ['ARKF', 'ARK Blockchain & Fintech Innovation ETF', 'ARK_BLOCKCHAIN_&_FINTECH_INNOVATION_ETF_ARKF_HOLDINGS.csv'],
+  ['ARKG', 'ARK Genomic Revolution ETF', 'ARK_GENOMIC_REVOLUTION_ETF_ARKG_HOLDINGS.csv'],
+  ['ARKX', 'ARK Space & Defense Innovation ETF', 'ARK_SPACE_&_DEFENSE_INNOVATION_ETF_ARKX_HOLDINGS.csv'],
 ].map(([id, name, file]) => ({
   id, name, investorId: 'cathie-wood',
   holdingsUrl: file ? `${holdingsBase}${file}` : undefined,

@@ -112,8 +112,8 @@ export default function Home() {
         <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-4">
           <div className="flex flex-col gap-4">
             <ThemeTreeFilter themeIds={themeIds} onLayerToggle={toggleLayer} onThemeToggle={toggleTheme} onClearThemes={() => setThemeIds([])} />
-            <InvestorHoldingsFilter value={investorId} onChange={setInvestorId} data={investorData} error={investorError} onRetry={() => setInvestorAttempt((attempt) => attempt + 1)} />
-            <div className="grid gap-3 md:grid-cols-[180px_180px_220px_170px_auto] md:items-end">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(230px,1.5fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(130px,1fr)_minmax(100px,0.8fr)_auto] sm:items-end">
+              <InvestorHoldingsFilter value={investorId} onChange={setInvestorId} data={investorData} error={investorError} onRetry={() => setInvestorAttempt((attempt) => attempt + 1)} />
               <MarketFilter value={market} onChange={setMarket} />
               <label className="flex flex-col gap-1 text-xs text-slate-400">
                 排序 Sort
@@ -143,9 +143,11 @@ export default function Home() {
           <span>所有视图每家公司只显示一次，相关性以营收/利润敞口百分比估算，散户热度/主力资金为可更新指标。</span>
         </div>
 
-        {view === 'cards' ? <CompanyGrid rows={rows} /> : null}
-        {view === 'treemap' ? <TreemapView rows={rows} metric={heatMetric} /> : null}
-        {view === 'heatmap' ? <HeatmapMatrix rows={rows} metric={heatMetric} /> : null}
+        <div id="dashboard-results" aria-busy={Boolean(investorId && !investorData && !investorError)}>
+          {view === 'cards' ? <CompanyGrid rows={rows} /> : null}
+          {view === 'treemap' ? <TreemapView rows={rows} metric={heatMetric} /> : null}
+          {view === 'heatmap' ? <HeatmapMatrix rows={rows} metric={heatMetric} /> : null}
+        </div>
       </div>
     </main>
   )

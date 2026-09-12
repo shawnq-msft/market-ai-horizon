@@ -106,7 +106,7 @@ test('provider isolates failures and retains valid sources without synthetic fal
   })
   const result = await fetchInvestorDataset()
   assert.equal(result.records.length, 2 + reviewedHoldings().length)
-  assert.equal(result.sources.filter((source) => source.status === 'unavailable').length, 3)
+  assert.equal(result.sources.filter((source) => source.status === 'unavailable').length, 6)
   assert.ok(result.records.filter((record) => record.investorId === 'cathie-wood').every((record) => record.kind === 'fund-trade'))
 })
 
@@ -122,6 +122,31 @@ test('holdings filter excludes trades, unmapped and zero positions; keeps newest
   assert.deepEqual([...holdingCompanyIds(records, 'cathie-wood')].sort(), ['amzn', 'nvda'])
   assert.equal(holdingCompanyIds(records, 'donald-trump').size, 0)
   assert.equal(holdingCompanyIds(records, '').size, 0)
+})
+
+test('all six ARK equity ETF holdings feeds contribute independently to the selector', async (context) => {
+  const funds = investorFunds.filter((item) => item.investorId === 'cathie-wood' && item.holdingsUrl)
+  assert.deepEqual(funds.map((item) => item.id).sort(), ['ARKF', 'ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKX'])
+  context.mock.method(globalThis, 'fetch', async (url: string) => {
+    const currentFund = funds.find((item) => item.holdingsUrl === url)
+    if (!currentFund) return new Response('unavailable', { status: 503 })
+    const row = [...holdings[1]]
+    row[1] = currentFund.id
+    if (currentFund.id === 'ARKX') {
+      row[2] = 'SpaceX'
+      row[3] = 'SPCX'
+      row[4] = 'TEST-SPCX'
+    }
+    const worksheet = XLSX.utils.aoa_to_sheet([holdings[0], row])
+    return new Response(XLSX.utils.sheet_to_csv(worksheet))
+  })
+  const result = await fetchInvestorDataset()
+  const records = result.records.filter((record) => record.investorId === 'cathie-wood')
+  assert.equal(records.length, 6)
+  assert.equal(new Set(records.map((record) => record.fundId)).size, 6)
+  assert.ok(records.every((record) => record.kind === 'holding' && record.evidence === 'official-disclosure'))
+  assert.equal(result.sources.filter((source) => source.id.startsWith('holdings-') && source.status === 'ok').length, 6)
+  assert.deepEqual([...holdingCompanyIds(records, 'cathie-wood')].sort(), ['spacex', 'tesla'])
 })
 
 test('latest report grouping separates investors even with shared account names', () => {
