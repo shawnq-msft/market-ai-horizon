@@ -24,6 +24,7 @@ export function CompanyDetailPanel({ company }: { company: Company }) {
             <SourceLink href={quoteUrl(company)} label="行情" />
             <SourceLink href={newsSearchUrl(company)} label="消息搜索" />
             <SourceLink href={valuationSourceUrl(company)} label={company.market === 'Private' ? '估值来源' : '估值核实'} />
+            <SourceLink href={company.earningsSourceUrl} label="财报日期来源" />
           </div>
         </div>
       </section>
@@ -34,7 +35,7 @@ export function CompanyDetailPanel({ company }: { company: Company }) {
         <Tile label="估值" value={formatValuation(company.valuationMetric, company.valuationValue)} />
         <Tile label="DC电力容量" value={formatGigawatts(company.dataCenterCapacityGw)} />
         <Tile label="GPU等效规模" value={formatGpuEquivalent(company.gpuEquivalentK)} />
-        <Tile label="下一期财报" value={company.nextEarningsDate ?? 'TBD'} />
+        <Tile label={company.earningsConfirmed ? '下一期财报（已确认）' : '下一期财报（预计）'} value={company.nextEarningsDate ?? 'TBD'} />
       </section>
 
       <StockCandlestickChart company={company} />

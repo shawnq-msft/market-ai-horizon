@@ -10,6 +10,7 @@ export const layers: Layer[] = [
       { id: 'hyperscaler-cloud', layerId: 'cloud-apps', nameZh: '超大规模云', nameEn: 'Hyperscaler Cloud', description: '通用云、AI 云、企业云和模型托管平台。' },
       { id: 'enterprise-copilot', layerId: 'cloud-apps', nameZh: '企业 AI / Copilot', nameEn: 'Enterprise AI / Copilot', description: '办公、SaaS、CRM、ITSM 和内容生成。' },
       { id: 'ai-agent-automation', layerId: 'cloud-apps', nameZh: 'AI Agent / 自动化', nameEn: 'AI Agent / Automation', description: 'Agent、RPA、数据智能和流程自动化。' },
+      { id: 'vertical-ai', layerId: 'cloud-apps', nameZh: '行业 / 消费 AI 应用', nameEn: 'Vertical AI', description: '行业应用、内容创作、消费 AI 助手和推荐服务。' },
       { id: 'robotics-embodied', layerId: 'cloud-apps', nameZh: '机器人 / 具身智能', nameEn: 'Robotics / Embodied AI', description: '工业机器人、人形机器人和自动化控制。' },
       { id: 'autonomous-edge-ai', layerId: 'cloud-apps', nameZh: '自动驾驶 / 端侧 AI', nameEn: 'Autonomous / Edge AI', description: '智能驾驶、端侧推理和 AI 终端。' },
       { id: 'ai-security-vision', layerId: 'cloud-apps', nameZh: 'AI 安全 / 视觉', nameEn: 'AI Security / Vision', description: '网络安全、视觉识别和行业 AI 安防。' },

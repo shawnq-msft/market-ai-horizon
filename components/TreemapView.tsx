@@ -46,8 +46,8 @@ export function TreemapView({ rows, metric }: { rows: CompanyThemeRow[]; metric:
   )
 }
 
-function TreeCell(props: any) {
-  const { x, y, width, height, name, fill, row, colorValue } = props
+function TreeCell(props: Partial<TreeNode> & { x?: number; y?: number; width?: number; height?: number }) {
+  const { x = 0, y = 0, width = 0, height = 0, name = '', fill, row, colorValue } = props
   if (width < 18 || height < 18) return null
   const companyRow: CompanyThemeRow | undefined = row
   const ticker = companyRow?.company.ticker ?? 'Private'
@@ -132,9 +132,9 @@ function formatMetricValue(row: CompanyThemeRow, metric: HeatMetric) {
   return Math.round(getHeatValue(row, metric)).toString()
 }
 
-function TreeTooltip({ active, payload, metric }: any) {
-  if (!active || !payload?.length) return null
-  const row: CompanyThemeRow = payload[0].payload.row
+function TreeTooltip({ active, payload, metric }: { active?: boolean; payload?: Array<{ payload?: Partial<TreeNode> }>; metric: HeatMetric }) {
+  const row = payload?.[0]?.payload?.row
+  if (!active || !row) return null
   const theme = getTheme(row.exposure.themeId)
 
   return (

@@ -36,3 +36,10 @@ export function formatDate(value?: string) {
   if (!value) return 'TBD'
   return value.slice(5)
 }
+
+export function isUpcomingEarnings(value: string | undefined, now = new Date()) {
+  if (!value) return false
+  const end = new Date(now)
+  end.setUTCDate(end.getUTCDate() + 30)
+  return value >= now.toISOString().slice(0, 10) && value <= end.toISOString().slice(0, 10)
+}

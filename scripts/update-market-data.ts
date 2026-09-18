@@ -1,8 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 import { companies } from '../data/companies.seed'
 import type { Company, Market } from '../lib/types'
+import { updateSeedProperties } from './seed-source'
 
 type YahooChartResponse = {
   chart?: {
@@ -10,6 +11,7 @@ type YahooChartResponse = {
       meta?: {
         regularMarketPrice?: number
         chartPreviousClose?: number
+        regularMarketTime?: number
       }
       indicators?: {
         quote?: Array<{
@@ -54,6 +56,7 @@ type SinaQuote = {
 type ProviderName = 'eastmoney' | 'yahoo' | 'sina' | 'itick'
 
 type ValuationUpdate = {
+  valuationSourceUrl?: string
   marketCap?: number
   metric?: 'PE' | 'P/B'
   value?: number
@@ -66,7 +69,8 @@ type QuoteUpdate = {
   symbol: string
   provider: ProviderName
   price: number
-  week: number
+  week?: number
+  asOf?: string
   retailHeat?: number
   mainFund?: number
   valuation?: ValuationUpdate
@@ -165,15 +169,18 @@ async function fetchYahooUpdate(company: Company): Promise<QuoteUpdate> {
   const symbol = yahooSymbol(company)
   if (!symbol) throw new Error('unsupported symbol')
 
-  const response = await fetchJson<YahooChartResponse>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`)
+  const response = await fetchJson<YahooChartResponse>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1mo&interval=1d`)
   const result = response.chart?.result?.[0]
   const closes = validCloses(response)
   const price = result?.meta?.regularMarketPrice ?? closes.at(-1)
-  const previous = closes.at(0) ?? result?.meta?.chartPreviousClose
+  const previous = closes.at(-6)
 
-  if (price === undefined || previous === undefined || previous === 0) throw new Error('no usable close data')
+  if (price === undefined) throw new Error('no usable close data')
 
-  return quoteUpdate(company, symbol, 'yahoo', price, previous)
+  const update = quoteUpdate(company, symbol, 'yahoo', price, previous)
+  const timestamp = result?.meta?.regularMarketTime
+  if (timestamp && Number.isFinite(timestamp)) update.asOf = new Date(timestamp * 1000).toISOString().slice(0, 10)
+  return update
 }
 
 async function fetchITickUpdate(company: Company): Promise<QuoteUpdate> {
@@ -183,12 +190,12 @@ async function fetchITickUpdate(company: Company): Promise<QuoteUpdate> {
   if (!symbol) throw new Error('unsupported symbol')
 
   await throttleITick()
-  const response = await fetchJson<ITickResponse>(`${iTickBaseUrl}/stock/kline?region=${symbol.region}&code=${encodeURIComponent(symbol.code)}&kType=8&limit=5`, {
+  const response = await fetchJson<ITickResponse>(`${iTickBaseUrl}/stock/kline?region=${symbol.region}&code=${encodeURIComponent(symbol.code)}&kType=8&limit=6`, {
     headers: { accept: 'application/json', token },
   })
   const closes = response.data?.map((item) => item.c ?? item.close).filter((value): value is number => typeof value === 'number' && Number.isFinite(value)) ?? []
   const price = closes.at(-1)
-  const previous = closes.at(0)
+  const previous = closes.at(-6)
   if (price === undefined || previous === undefined || previous === 0) throw new Error(response.msg ?? 'no usable close data')
 
   return quoteUpdate(company, `${symbol.region}:${symbol.code}`, 'itick', price, previous)
@@ -198,17 +205,18 @@ async function fetchEastMoneyUpdate(company: Company): Promise<QuoteUpdate> {
   const symbol = eastMoneySymbol(company)
   if (!symbol) throw new Error('unsupported symbol')
 
-  const response = await fetchJson<EastMoneyKlineResponse>(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${symbol.secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=5`, eastMoneyRequestInit)
+  const response = await fetchJson<EastMoneyKlineResponse>(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${symbol.secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=6`, eastMoneyRequestInit)
   const rows = response.data?.klines ?? []
   const closes = rows.map((row) => Number(row.split(',')[2])).filter((value) => Number.isFinite(value))
   const turnovers = rows.map((row) => Number(row.split(',')[6])).filter((value) => Number.isFinite(value))
   const price = closes.at(-1)
-  const previous = closes.at(0)
+  const previous = closes.at(-6)
   if (price === undefined || previous === undefined || previous === 0) throw new Error('no usable close data')
 
   const retailHeat = heatFromTurnover(turnovers)
   const mainFund = mainFundFromPriceAndTurnover(closes, turnovers)
   const update = quoteUpdate(company, symbol.label, 'eastmoney', price, previous, retailHeat, mainFund)
+  update.asOf = rows.at(-1)?.split(',')[0]
   update.valuation = await fetchEastMoneyValuation(company)
   return update
 }
@@ -218,7 +226,8 @@ async function fetchEastMoneyValuation(company: Company): Promise<ValuationUpdat
   if (!symbol) return undefined
 
   try {
-    const response = await fetchJson<EastMoneySnapshotResponse>(`https://push2.eastmoney.com/api/qt/stock/get?secid=${symbol.secid}&fields=f116,f162,f167,f173,f172`, eastMoneyRequestInit)
+    const sourceUrl = `https://push2.eastmoney.com/api/qt/stock/get?secid=${symbol.secid}&fields=f116,f162,f167,f173,f172`
+    const response = await fetchJson<EastMoneySnapshotResponse>(sourceUrl, eastMoneyRequestInit)
     const data = response.data
     if (!data) return undefined
 
@@ -230,6 +239,7 @@ async function fetchEastMoneyValuation(company: Company): Promise<ValuationUpdat
     const score = metric && value ? valuationScore(metric, value) : undefined
 
     return {
+      valuationSourceUrl: marketCap !== undefined || metric ? sourceUrl : undefined,
       marketCap,
       metric,
       value,
@@ -251,7 +261,7 @@ async function fetchSinaUpdate(company: Company): Promise<QuoteUpdate> {
   const quote = parseSinaQuote(text, company.market)
   if (!quote.price || !quote.previous) throw new Error('no usable quote data')
 
-  return quoteUpdate(company, symbol.label, 'sina', quote.price, quote.previous, heatFromTurnover([quote.turnover]), mainFundFromPriceAndTurnover([quote.previous, quote.price], [quote.turnover]))
+  return quoteUpdate(company, symbol.label, 'sina', quote.price, undefined)
 }
 
 function iTickSymbol(company: Company) {
@@ -317,13 +327,20 @@ function parseSinaQuote(text: string, market: Market): SinaQuote {
   }
 }
 
-function quoteUpdate(company: Company, symbol: string, provider: ProviderName, price: number, previous: number, retailHeat?: number, mainFund?: number): QuoteUpdate {
+export function sessionChange(price: number, previous?: number) {
+  if (!Number.isFinite(price) || price <= 0) throw new Error('Invalid market price')
+  if (previous === undefined) return undefined
+  if (!Number.isFinite(previous) || previous <= 0) throw new Error('Invalid reference close')
+  return round((price / previous - 1) * 100, 1)
+}
+
+function quoteUpdate(company: Company, symbol: string, provider: ProviderName, price: number, previous?: number, retailHeat?: number, mainFund?: number): QuoteUpdate {
   return {
     company,
     symbol,
     provider,
     price: round(price, price >= 100 ? 1 : 2),
-    week: round((price / previous - 1) * 100, 1),
+    week: sessionChange(price, previous),
     retailHeat,
     mainFund,
   }
@@ -401,47 +418,14 @@ function round(value: number, digits: number) {
   return Math.round(value * scale) / scale
 }
 
-function upsertNumberProperty(line: string, property: string, value: number) {
-  const formatted = `${property}: ${value}`
-  const pattern = new RegExp(`, ${property}: -?\\d+(?:\\.\\d+)?`)
-  if (pattern.test(line)) return line.replace(pattern, `, ${formatted}`)
-  if (property === 'price') return line.replace(', week:', `, ${formatted}, week:`)
-  if (property === 'week') return line.replace(', metric:', `, ${formatted}, metric:`)
-  if (property === 'marketCap') return line.replace(', price:', `, ${formatted}, price:`)
-  return line.replace(', metric:', `, ${formatted}, metric:`)
-}
-
-function upsertStringProperty(line: string, property: string, value: string) {
-  const formatted = `${property}: '${escapeString(value)}'`
-  const pattern = new RegExp(`, ${property}: '[^']*'`)
-  if (pattern.test(line)) return line.replace(pattern, `, ${formatted}`)
-  return line.replace(', value:', `, ${formatted}, value:`)
-}
-
 function updateCompanyLine(source: string, update: QuoteUpdate) {
-  const pattern = new RegExp(`seed\\(\\{ id: '${escapeRegExp(update.company.id)}', .*? \\}\\),`)
-  const match = source.match(pattern)
-  if (!match) return source
-
-  let line = match[0]
-  line = upsertNumberProperty(line, 'price', update.price)
-  line = upsertNumberProperty(line, 'week', update.week)
-  if (update.retailHeat !== undefined) line = upsertNumberProperty(line, 'retailHeat', update.retailHeat)
-  if (update.mainFund !== undefined) line = upsertNumberProperty(line, 'mainFund', update.mainFund)
-  if (update.valuation?.marketCap !== undefined) line = upsertNumberProperty(line, 'marketCap', update.valuation.marketCap)
-  if (update.valuation?.metric) line = upsertStringProperty(line, 'metric', update.valuation.metric)
-  if (update.valuation?.value !== undefined) line = upsertNumberProperty(line, 'value', update.valuation.value)
-  if (update.valuation?.score !== undefined) line = upsertNumberProperty(line, 'score', update.valuation.score)
-  if (update.valuation?.label) line = upsertStringProperty(line, 'label', update.valuation.label)
-  return source.replace(match[0], line)
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function escapeString(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  const values = {
+    price: update.price, week: update.week, retailHeat: update.retailHeat, mainFund: update.mainFund,
+    ...update.valuation, updatedAt: update.asOf ?? today,
+  }
+  return updateSeedProperties(source, update.company.id, Object.fromEntries(
+    Object.entries(values).filter(([key, value]) => key === 'week' || value !== undefined).map(([key, value]) => [key, JSON.stringify(value)]),
+  ))
 }
 
 function parseOptions(args: string[]): RefreshOptions {
@@ -507,7 +491,6 @@ async function main() {
   }
 
   let source = await readFile(sourcePath, 'utf8')
-  source = source.replace(/const updatedAt = '\d{4}-\d{2}-\d{2}'/, `const updatedAt = '${today}'`)
   for (const update of updates) source = updateCompanyLine(source, update)
   await writeFile(sourcePath, source)
 
@@ -532,7 +515,7 @@ function providerCounts(updates: QuoteUpdate[]) {
   return counts
 }
 
-main().catch((error) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main().catch((error) => {
   console.error(error)
   process.exit(1)
 })

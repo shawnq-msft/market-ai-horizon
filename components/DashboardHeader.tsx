@@ -1,13 +1,14 @@
 import { Activity, BarChart3, CalendarClock, Database, TrendingUp } from 'lucide-react'
 import { MetricBadge } from './MetricBadge'
-import { companies } from '@/data/companies.seed'
 import type { CompanyThemeRow } from '@/lib/filters'
-import { formatPercent } from '@/lib/format'
+import { formatPercent, isUpcomingEarnings } from '@/lib/format'
 
 export function DashboardHeader({ rows }: { rows: CompanyThemeRow[] }) {
-  const avgWeek = rows.length ? rows.reduce((sum, row) => sum + (row.company.weekChangePct ?? 0), 0) / rows.length : 0
+  const companies = rows.map((row) => row.company)
+  const weekly = companies.flatMap((company) => company.weekChangePct === undefined ? [] : [company.weekChangePct])
+  const avgWeek = weekly.length ? weekly.reduce((sum, value) => sum + value, 0) / weekly.length : undefined
   const highRelevance = rows.filter((row) => row.exposure.relevance >= 5).length
-  const earningsSoon = companies.filter((company) => company.nextEarningsDate && company.nextEarningsDate <= '2026-06-15').length
+  const earningsSoon = companies.filter((company) => isUpcomingEarnings(company.nextEarningsDate)).length
   const privateCount = companies.filter((company) => company.market === 'Private').length
 
   return (

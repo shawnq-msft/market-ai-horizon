@@ -44,7 +44,7 @@ export function CompanyThemeCard({ row }: { row: CompanyThemeRow }) {
 
       <div className="mt-1 flex items-center justify-between gap-1 text-[9px] leading-3 text-slate-500">
         <span className="truncate text-slate-300">{formatValuation(company.valuationMetric, company.valuationValue)}</span>
-        <span className="shrink-0">财 {formatDate(company.nextEarningsDate)}</span>
+        <span className="shrink-0">财 {formatDate(company.nextEarningsDate)}{company.nextEarningsDate && !company.earningsConfirmed ? ' 预计' : ''}</span>
       </div>
 
       <div className="mt-1 flex items-center gap-2 text-[9px] leading-3 text-slate-500">

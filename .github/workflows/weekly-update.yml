@@ -18,10 +18,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run update:all
+      - run: npm run lint
+      - run: npm test
+        env:
+          GITHUB_ACTIONS: 'false'
+          STATIC_EXPORT: 'false'
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run update:market -- --all
-      - run: npm run update:benchmarks
       - name: Commit updated seed data
         run: |
           git config user.name "github-actions[bot]"

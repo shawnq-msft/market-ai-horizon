@@ -29,14 +29,24 @@ test('SpaceX appears in its satellite theme and US market without duplicating vi
   assert.equal(filterThemeRows({ rows, themeIds: ['space-satellite-compute'], market: 'Private' }).length, 0)
 })
 
-test('SpaceX does not fabricate valuation, earnings, or operational orbital compute', () => {
+test('SpaceX permits sourced quote refreshes without fabricating operational orbital compute', () => {
   const company = companies.find((item) => item.id === 'spacex')!
-  assert.equal(company.valuationLabel, 'Unknown')
-  assert.equal(company.valuationValue, undefined)
-  assert.equal(company.marketCapUsdBn, undefined)
-  assert.equal(company.price, undefined)
-  assert.equal(company.nextEarningsDate, undefined)
+  if (company.valuationValue !== undefined) {
+    assert.ok(Number.isFinite(company.valuationValue) && company.valuationValue > 0)
+    assert.ok(company.valuationSourceUrl?.startsWith('https://'))
+  } else assert.equal(company.valuationLabel, 'Unknown')
+  if (company.price !== undefined) assert.ok(Number.isFinite(company.price) && company.price > 0)
+  if (company.marketCapUsdBn !== undefined) assert.ok(Number.isFinite(company.marketCapUsdBn) && company.marketCapUsdBn > 0)
+  if (company.nextEarningsDate) assert.ok(company.earningsSourceUrl?.startsWith('https://'))
   assert.equal(company.dataCenterCapacityGw, undefined)
-  assert.equal(company.updatedAt, '2026-09-07')
+  assert.match(company.updatedAt, /^\d{4}-\d{2}-\d{2}$/)
   assert.equal(company.dataQuality, 'estimated')
+})
+
+test('every company exposure resolves to a theme in its declared layer', () => {
+  for (const company of companies) {
+    for (const exposure of company.themeExposures) {
+      assert.equal(getTheme(exposure.themeId)?.layerId, exposure.layerId, `${company.id}: ${exposure.themeId}`)
+    }
+  }
 })

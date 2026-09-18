@@ -1,9 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 import { companies } from '../data/companies.seed'
 import { modelCompanyMappings } from '../data/model-company-mapping'
 import type { BenchmarkProvider, ModelBenchmarkMetric } from '../lib/types'
+import { updateSeedProperties } from './seed-source'
 
 type RawMetric = Omit<ModelBenchmarkMetric, 'updatedAt'>
 
@@ -40,11 +41,12 @@ async function main() {
   const byCompany = bestMetricsByCompany(metrics, selectedCompanyIds)
 
   let source = await readFile(sourcePath, 'utf8')
-  source = source.replace(/const updatedAt = '\d{4}-\d{2}-\d{2}'/, `const updatedAt = '${today}'`)
-
   let updated = 0
-  for (const [companyId, companyMetrics] of byCompany) {
-    const nextSource = updateCompanyBenchmarks(source, companyId, companyMetrics)
+  for (const company of companies.filter((item) => selectedCompanyIds.has(item.id))) {
+    const incoming = byCompany.get(company.id) ?? []
+    const merged = mergeBenchmarks(company.modelBenchmarks ?? [], incoming)
+    if (!merged.length && !company.modelBenchmarks?.length) continue
+    const nextSource = updateSeedProperties(source, company.id, { modelBenchmarks: JSON.stringify(merged) })
     if (nextSource !== source) updated += 1
     source = nextSource
   }
@@ -74,7 +76,38 @@ async function fetchMmluProMetrics(): Promise<RawMetric[]> {
 }
 
 async function fetchAgentMetrics(): Promise<RawMetric[]> {
-  return fetchGenericLeaderboard('agent', 'SWE-bench Verified', agentSources, ['resolved', 'score', 'pass_rate'])
+  return parseSweBenchVerified(await fetchText(agentSources[0]))
+}
+
+export function parseSweBenchVerified(html: string): RawMetric[] {
+  const script = html.match(/<script\b[^>]*\bid=["']leaderboard-data["'][^>]*>([\s\S]*?)<\/script>/i)
+  if (!script) throw new Error('Missing SWE-bench leaderboard JSON')
+  const data: unknown = JSON.parse(script[1])
+  const verified = Array.isArray(data) ? data.find((item) => isRecord(item) && item.name === 'Verified') : undefined
+  if (!isRecord(verified) || !Array.isArray(verified.results)) throw new Error('Missing Verified track')
+  const rows = verified.results.filter(isRecord).flatMap((row): RawMetric[] => {
+    const score = getNumber(row, ['resolved'])
+    const modelName = getString(row, ['name'])
+    if (!modelName || score === undefined || score < 0 || score > 100) return []
+    return [{ provider: 'agent', sourceName: 'SWE-bench Verified (agent + model)', sourceUrl: agentSources[0], modelName, score, scoreLabel: `${score}%` }]
+  })
+  if (!rows.length) throw new Error('Empty Verified track')
+  return rows
+}
+
+export function mergeBenchmarks(existing: ModelBenchmarkMetric[], incoming: ModelBenchmarkMetric[]) {
+  const providers = new Set(incoming.map((metric) => metric.provider))
+  return [...existing.filter((metric) => !providers.has(metric.provider)).map((metric) => {
+    if (metric.provider === 'openrouter' && metric.sourceUrl === openRouterSources[0]) {
+      const catalog = { ...metric }
+      delete catalog.usageRank
+      delete catalog.usageSharePct
+      delete catalog.rank
+      return catalog
+    }
+    if (metric.provider === 'agent' && metric.sourceUrl === agentSources[0] && metric.sourceName === 'SWE-bench Verified') return undefined
+    return metric
+  }).filter((metric): metric is ModelBenchmarkMetric => Boolean(metric)), ...incoming]
 }
 
 async function fetchCodingMetrics(): Promise<RawMetric[]> {
@@ -84,15 +117,14 @@ async function fetchCodingMetrics(): Promise<RawMetric[]> {
 async function fetchOpenRouterMetrics(): Promise<RawMetric[]> {
   const json = await fetchJson<{ data?: unknown }>(openRouterSources[0])
   const rows: Array<Record<string, unknown>> = Array.isArray(json.data) ? json.data.filter(isRecord) : []
-  return rows.flatMap((row, index): RawMetric[] => {
+  return rows.flatMap((row): RawMetric[] => {
     const modelName = String(row.id ?? row.name ?? '')
     if (!modelName) return []
     return [{
       provider: 'openrouter',
-      sourceName: 'OpenRouter Models',
+      sourceName: 'OpenRouter model catalog (not usage)',
       sourceUrl: openRouterSources[0],
       modelName,
-      usageRank: index + 1,
       usageLabel: row.context_length ? `${Number(row.context_length).toLocaleString()} ctx` : undefined,
     }]
   })
@@ -118,10 +150,10 @@ async function fetchGenericLeaderboard(provider: BenchmarkProvider, sourceName: 
 function normalizeRows(provider: BenchmarkProvider, sourceName: string, sourceUrl: string, rows: Array<Record<string, unknown>>, scoreKeys: string[]): RawMetric[] {
   const metrics: RawMetric[] = []
 
-  rows.forEach((row, index) => {
+  rows.forEach((row) => {
     const modelName = getString(row, ['model', 'model_name', 'name', 'Model', 'Model Name', 'system'])
     const score = getNumber(row, scoreKeys)
-    const rank = getNumber(row, ['rank', 'Rank']) ?? (score !== undefined ? index + 1 : undefined)
+    const rank = getNumber(row, ['rank', 'Rank'])
     if (!modelName || (score === undefined && rank === undefined)) return
     metrics.push({
       provider,
@@ -166,6 +198,7 @@ function matchesMapping(metric: RawMetric, keywords: string[], openRouterIds?: s
 
 function metricScore(metric: ModelBenchmarkMetric) {
   if (metric.provider === 'openrouter') return metric.usageRank ? 10000 - metric.usageRank : 0
+  if (metric.score !== undefined) return metric.score
   if (metric.rank) return 10000 - metric.rank
   return metric.score ?? 0
 }
@@ -175,34 +208,6 @@ function providerOrder(provider: BenchmarkProvider) {
   if (provider === 'agent') return 1
   if (provider === 'coding') return 2
   return 3
-}
-
-function updateCompanyBenchmarks(source: string, companyId: string, metrics: ModelBenchmarkMetric[]) {
-  const company = companies.find((item) => item.id === companyId)
-  if (!company) return source
-
-  const pattern = new RegExp(`seed\\(\\{ id: '${escapeRegExp(companyId)}', .*? \\}\\),`)
-  const match = source.match(pattern)
-  if (!match) return source
-
-  const property = `, modelBenchmarks: ${formatBenchmarks(metrics)}`
-  const existing = /, modelBenchmarks: \[[\s\S]*?\](?=, metric:|, risks:|, related|, extra:| \}\),)/
-  const line = existing.test(match[0])
-    ? match[0].replace(existing, property)
-    : match[0].replace(', metric:', `${property}, metric:`)
-  return source.replace(match[0], line)
-}
-
-function formatBenchmarks(metrics: ModelBenchmarkMetric[]) {
-  return `[${metrics.map((metric) => `{ provider: '${metric.provider}', sourceName: '${escapeString(metric.sourceName)}', sourceUrl: '${escapeString(metric.sourceUrl)}', modelName: '${escapeString(metric.modelName)}'${formatOptionalNumber('rank', metric.rank)}${formatOptionalNumber('score', metric.score)}${formatOptionalString('scoreLabel', metric.scoreLabel)}${formatOptionalNumber('usageRank', metric.usageRank)}${formatOptionalNumber('usageSharePct', metric.usageSharePct)}${formatOptionalString('usageLabel', metric.usageLabel)}, updatedAt: '${metric.updatedAt}' }`).join(', ')}]`
-}
-
-function formatOptionalNumber(property: string, value: number | undefined) {
-  return value === undefined ? '' : `, ${property}: ${round(value, 2)}`
-}
-
-function formatOptionalString(property: string, value: string | undefined) {
-  return value === undefined ? '' : `, ${property}: '${escapeString(value)}'`
 }
 
 function getString(row: Record<string, unknown>, keys: string[]) {
@@ -218,6 +223,7 @@ function getNumber(row: Record<string, unknown>, keys: string[]) {
     const value = row[key]
     if (typeof value === 'number' && Number.isFinite(value)) return value
     if (typeof value === 'string') {
+      if (!value.trim()) continue
       const parsed = Number(value.replace('%', '').trim())
       if (Number.isFinite(parsed)) return parsed
     }
@@ -275,15 +281,7 @@ function round(value: number, digits: number) {
   return Math.round(value * scale) / scale
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function escapeString(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-}
-
-main().catch((error) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main().catch((error) => {
   console.error(error)
   process.exit(1)
 })

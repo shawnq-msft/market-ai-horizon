@@ -11,6 +11,21 @@ Hosted on GitHub Pages · [投资人与机构 / Investors](https://shawnq-msft.g
 - Install dependencies with `npm install`.
 - Start the development server with `npm run dev`.
 - Validate with `npm test`, `npm run typecheck`, and `npm run build`.
+- Lint with `npm run lint` (ESLint CLI; Next.js 16 no longer provides `next lint`).
+- Refresh connected sources with `npm run update:all`, then validate and rebuild. This refreshes listed quotes, available valuation snapshots, model benchmarks/catalog, and upcoming US earnings estimates. Theme checks validate existing classifications; they do not generate new investment research.
+- Preview an exported `out` directory with `npm run preview` (default port 3010; override with `-- --port=3011`). The preview supports the `/market-ai-horizon/` Pages base path and avoids shell-embedded JavaScript.
+
+## Data Refresh And Limits
+
+- Quote writes target individual seed properties and preserve unrelated and nested data. Successful quotes update only their company's date (the provider's quote date when available); a partial refresh never advances every company to today.
+- Five-session returns require six daily closes. A quote-only fallback does not label a one-day return as a weekly return. Missing values are not zero returns in the dashboard average.
+- Valuation fields refresh only where the provider supplies usable values; other values retain their previous snapshot. Eastmoney currency conversion uses fixed USD approximations, not live FX. Qualitative scores, private valuations, and data-center capacities remain research estimates, not freshly verified operational facts.
+- Upcoming US earnings dates come from Nasdaq/Zacks. They remain **unconfirmed estimates**, with a source URL and retrieval date. Expired next-earnings dates are removed; unavailable calendars and other markets remain unknown. The summary counts the next 30 days for the current filtered companies.
+- SWE-bench reads only the structured **Verified** track and retains the agent + model name. It does not invent ranks from document order or mix Lite/Multilingual results. OpenRouter's model catalog supplies model metadata, **not usage ranks or market shares**. Unavailable benchmark providers retain prior values/dates; known incorrectly parsed legacy metrics are removed.
+- ARK holdings/trades and company candles are fetched when the static site is rebuilt. Manually reviewed investor disclosures retain their original report/review dates; they are not automatically refreshed or complete portfolios.
+- The weekly workflow refreshes first, then lints/tests/builds before committing. A successful run triggers the Pages workflow explicitly, including when there are no seed changes, because a bot-token push alone does not trigger another workflow.
+
+Latest local refresh (2026-09-18): 118/119 listed quotes, 36 valuation snapshots captured on the first pass, model data for 15 companies, and 45 upcoming US earnings estimates. The second market pass used quote-only Sina fallbacks for 25 companies because Eastmoney became unavailable; those weekly returns are unknown, and prior valuations are retained. The static export contains 273 investor records (all six ARK holdings feeds and the trade feed succeeded) and histories for 118 listed companies. Shinko Electric quotes/history, MMLU-Pro/coding feeds, and some earnings calendars were unavailable. Manually reviewed investor holdings and qualitative classifications were not re-verified; all 139 companies and 177 theme exposures passed integrity checks.
 
 ## Smart Money Sensor
 

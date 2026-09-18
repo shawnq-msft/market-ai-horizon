@@ -115,6 +115,8 @@ export type Company = {
   valuationLabel: ValuationLabel
   nextEarningsDate?: string
   earningsConfirmed?: boolean
+  earningsSourceUrl?: string
+  earningsUpdatedAt?: string
   riskFlags: string[]
   dataQuality: DataQuality
   updatedAt: string
