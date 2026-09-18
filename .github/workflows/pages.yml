@@ -29,10 +29,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
-        env:
-          GITHUB_ACTIONS: 'false'
-          STATIC_EXPORT: 'false'
+      - run: GITHUB_ACTIONS=false STATIC_EXPORT=false npm test
       - run: npm run typecheck
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
