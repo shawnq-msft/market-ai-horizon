@@ -47,11 +47,13 @@ export function CompanyThemeCard({ row }: { row: CompanyThemeRow }) {
         <span className="shrink-0">财 {formatDate(company.nextEarningsDate)}{company.nextEarningsDate && !company.earningsConfirmed ? ' 预计' : ''}</span>
       </div>
 
-      <div className="mt-1 flex items-center gap-2 text-[9px] leading-3 text-slate-500">
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] leading-3 text-slate-500">
         {company.listed && company.ticker ? <Link className="text-cyan-300 hover:text-cyan-100" href={`/companies/${company.id}#stock-chart`}>K线</Link> : null}
         {companyQuoteUrl ? <ExternalCardLink href={companyQuoteUrl} label="行情" /> : null}
         <ExternalCardLink href={companyNewsUrl} label="消息" />
         {company.market === 'Private' && companyValuationSourceUrl ? <ExternalCardLink href={companyValuationSourceUrl} label="估值源" /> : null}
+        {company.quoteSourceUrl ? <ExternalCardLink href={company.quoteSourceUrl} label={`价源 ${company.updatedAt}`} /> : null}
+        {company.valuationUpdatedAt && company.valuationSourceUrl ? <ExternalCardLink href={company.valuationSourceUrl} label={`估值 ${company.valuationUpdatedAt}`} /> : null}
       </div>
     </div>
   )

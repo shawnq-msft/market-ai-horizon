@@ -43,6 +43,19 @@ test('SpaceX permits sourced quote refreshes without fabricating operational orb
   assert.equal(company.dataQuality, 'estimated')
 })
 
+test('UI data suppresses unsourced legacy financial observations', () => {
+  for (const company of companies) {
+    if (!company.quoteSourceUrl) {
+      assert.equal(company.price, undefined, company.id)
+      assert.equal(company.weekChangePct, undefined, company.id)
+    }
+    if (!company.valuationUpdatedAt) {
+      assert.equal(company.valuationValue, undefined, company.id)
+      assert.equal(company.valuationLabel, 'Unknown', company.id)
+    }
+  }
+})
+
 test('every company exposure resolves to a theme in its declared layer', () => {
   for (const company of companies) {
     for (const exposure of company.themeExposures) {

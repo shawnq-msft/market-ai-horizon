@@ -107,6 +107,8 @@ export type Company = {
   gpuEquivalentK?: number
   modelBenchmarks?: ModelBenchmarkMetric[]
   valuationSourceUrl?: string
+  valuationUpdatedAt?: string
+  quoteSourceUrl?: string
   quoteUrl?: string
   newsSearchUrl?: string
   valuationMetric?: ValuationMetric

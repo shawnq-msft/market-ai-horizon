@@ -140,7 +140,7 @@ export default function Home() {
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
           <span>当前公司：{rows.length} · 已选主题：{themeIds.length || '全部'}</span>
-          <span>所有视图每家公司只显示一次，相关性以营收/利润敞口百分比估算，散户热度/主力资金为可更新指标。</span>
+          <span>每家公司只显示一次；R/P/E 与颜色为定性研究估计，不是经审计营收占比或已测量弹性；缺失行情/估值显示 —。</span>
         </div>
 
         <div id="dashboard-results" aria-busy={Boolean(investorId && !investorData && !investorError)}>

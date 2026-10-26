@@ -16,7 +16,7 @@ export function DashboardHeader({ rows }: { rows: CompanyThemeRow[] }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs text-sky-200">
-            <Database className="h-3.5 w-3.5" /> Seed data · 非实时行情 · 非投资建议
+            <Database className="h-3.5 w-3.5" /> 供应商延迟快照 · 非实时行情 · 非投资建议
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-white md:text-4xl">全球 AI 产业链情报看板</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-400">
@@ -36,6 +36,8 @@ export function DashboardHeader({ rows }: { rows: CompanyThemeRow[] }) {
         <MetricBadge label="电力" value="单独层" tone="amber" />
         <MetricBadge label="跨主题" value="统一落地页" tone="emerald" />
       </div>
+      <p className="mt-3 text-xs text-slate-400">价格日期见公司详情；估值有独立取数日期，缺失显示 —。R/P/E、估值色阶及资金热度均为历史研究估计/价格成交量代理，不是实测营收占比、收入弹性或真实资金流；不得据此交易。未上市公司没有实时股价。</p>
+      <a className="mt-2 inline-block text-xs text-sky-300 underline" href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/api/companies/snapshot.json`}>下载有来源与日期的 JSON（未知值为 null）</a>
     </header>
   )
 }

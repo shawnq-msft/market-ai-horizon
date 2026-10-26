@@ -3,7 +3,27 @@ import { test } from 'node:test'
 import { updateSeedProperties } from '../scripts/seed-source'
 import { parseEarningsDate } from '../scripts/update-earnings-calendar'
 import { mergeBenchmarks, parseSweBenchVerified } from '../scripts/update-model-benchmarks'
-import { sessionChange } from '../scripts/update-market-data'
+import { sessionChange, updateCompanyLine, parseTencentHkValuation } from '../scripts/update-market-data'
+
+test('HK valuation uses field 39 not the A-share PB slot and requires provider date', () => {
+  const fields = Array(80).fill('')
+  fields[30] = '2026/10/26 15:55:05'; fields[39] = '14.13'; fields[46] = 'TENCENT'
+  assert.deepEqual(parseTencentHkValuation(`v_hk00700="${fields.join('~')}";`), { metric: 'PE', value: 14.13, asOf: '2026-10-26' })
+  fields[39] = '-'; assert.equal(parseTencentHkValuation(`v_hk00700="${fields.join('~')}";`), undefined)
+})
+import { companies } from '../data/companies.seed'
+
+test('quote writes retain exact provider provenance and date valuations separately', () => {
+  const source = "seed({ id: 'msft', price: 1, value: 20, valuationUpdatedAt: '2026-10-01', updatedAt: 'old' })"
+  const update = { company: companies.find(c => c.id === 'msft')!, symbol: 'MSFT', provider: 'yahoo' as const, price: 500, asOf: '2026-10-23', sourceUrl: 'https://query1.finance.yahoo.com/v8/finance/chart/MSFT?range=1mo&interval=1d' }
+  const result = updateCompanyLine(source, update)
+  assert.match(result, /quoteSourceUrl: "https:\/\/query1/)
+  assert.ok(result.includes("valuationUpdatedAt: '2026-10-01'"))
+  assert.match(result, /updatedAt: "2026-10-23"/)
+  const valued = updateCompanyLine(source, { ...update, valuation: { metric: 'PE', value: 25, valuationSourceUrl: 'https://example.com/value' } })
+  assert.match(valued, /valuationUpdatedAt: "\d{4}-\d{2}-\d{2}"/)
+})
+
 import { isUpcomingEarnings } from '../lib/format'
 import { createPreviewServer } from '../scripts/preview-static'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'

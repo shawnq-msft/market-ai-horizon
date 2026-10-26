@@ -56,6 +56,7 @@ type SinaQuote = {
 type ProviderName = 'eastmoney' | 'yahoo' | 'sina' | 'itick'
 
 type ValuationUpdate = {
+  valuationUpdatedAt?: string
   valuationSourceUrl?: string
   marketCap?: number
   metric?: 'PE' | 'P/B'
@@ -66,6 +67,7 @@ type ValuationUpdate = {
 
 type QuoteUpdate = {
   company: Company
+  sourceUrl?: string
   symbol: string
   provider: ProviderName
   price: number
@@ -147,6 +149,7 @@ async function fetchQuoteUpdate(company: Company, providers: ProviderName[]): Pr
             ? await fetchSinaUpdate(company)
             : await fetchITickUpdate(company)
       update.valuation ??= await fetchEastMoneyValuation(company)
+      if (!update.valuation?.metric && company.market === 'HK') update.valuation = await fetchTencentHkValuation(company) ?? update.valuation
       return update
     } catch (error) {
       errors.push(`${provider}: ${error instanceof Error ? error.message : String(error)}`)
@@ -178,6 +181,7 @@ async function fetchYahooUpdate(company: Company): Promise<QuoteUpdate> {
   if (price === undefined) throw new Error('no usable close data')
 
   const update = quoteUpdate(company, symbol, 'yahoo', price, previous)
+  update.sourceUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1mo&interval=1d`
   const timestamp = result?.meta?.regularMarketTime
   if (timestamp && Number.isFinite(timestamp)) update.asOf = new Date(timestamp * 1000).toISOString().slice(0, 10)
   return update
@@ -216,6 +220,7 @@ async function fetchEastMoneyUpdate(company: Company): Promise<QuoteUpdate> {
   const retailHeat = heatFromTurnover(turnovers)
   const mainFund = mainFundFromPriceAndTurnover(closes, turnovers)
   const update = quoteUpdate(company, symbol.label, 'eastmoney', price, previous, retailHeat, mainFund)
+  update.sourceUrl = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${symbol.secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=6`
   update.asOf = rows.at(-1)?.split(',')[0]
   update.valuation = await fetchEastMoneyValuation(company)
   return update
@@ -261,7 +266,11 @@ async function fetchSinaUpdate(company: Company): Promise<QuoteUpdate> {
   const quote = parseSinaQuote(text, company.market)
   if (!quote.price || !quote.previous) throw new Error('no usable quote data')
 
-  return quoteUpdate(company, symbol.label, 'sina', quote.price, undefined)
+  const update = quoteUpdate(company, symbol.label, 'sina', quote.price, undefined)
+  update.sourceUrl = `https://hq.sinajs.cn/list=${symbol.code}`
+  const fields = text.match(/=\"(.*)\"/)?.[1]?.split(',') ?? []
+  update.asOf = company.market === 'CN' ? fields[30] : company.market === 'HK' ? fields[17]?.replaceAll('/', '-') : undefined
+  return update
 }
 
 function iTickSymbol(company: Company) {
@@ -418,14 +427,36 @@ function round(value: number, digits: number) {
   return Math.round(value * scale) / scale
 }
 
-function updateCompanyLine(source: string, update: QuoteUpdate) {
+export function updateCompanyLine(source: string, update: QuoteUpdate) {
   const values = {
     price: update.price, week: update.week, retailHeat: update.retailHeat, mainFund: update.mainFund,
     ...update.valuation, updatedAt: update.asOf ?? today,
+    quoteSourceUrl: update.sourceUrl,
+    valuationUpdatedAt: update.valuation?.metric && update.valuation.value !== undefined ? update.valuation.valuationUpdatedAt ?? today : undefined,
   }
   return updateSeedProperties(source, update.company.id, Object.fromEntries(
     Object.entries(values).filter(([key, value]) => key === 'week' || value !== undefined).map(([key, value]) => [key, JSON.stringify(value)]),
   ))
+}
+
+export function parseTencentHkValuation(text: string) {
+  const fields = text.match(/=\"(.*)\"/)?.[1]?.split('~') ?? []
+  const value = Number(fields[39])
+  const asOf = fields[30]?.slice(0, 10).replaceAll('/', '-')
+  if (!Number.isFinite(value) || value <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(asOf ?? '')) return undefined
+  return { metric: 'PE' as const, value, asOf }
+}
+
+async function fetchTencentHkValuation(company: Company): Promise<ValuationUpdate | undefined> {
+  const ticker = primaryTicker(company)?.replace('.HK', '').padStart(5, '0')
+  if (!ticker || !/^\d{5}$/.test(ticker)) return undefined
+  const valuationSourceUrl = `https://qt.gtimg.cn/q=hk${ticker}`
+  try {
+    const parsed = parseTencentHkValuation(await fetchText(valuationSourceUrl))
+    if (!parsed) return undefined
+    const score = valuationScore(parsed.metric, parsed.value)
+    return { metric: parsed.metric, value: parsed.value, score, label: valuationLabel(score), valuationSourceUrl, valuationUpdatedAt: parsed.asOf }
+  } catch { return undefined }
 }
 
 function parseOptions(args: string[]): RefreshOptions {
